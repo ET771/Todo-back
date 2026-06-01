@@ -30,7 +30,7 @@ public class TodoMapper {
         if (entity.getParent() != null && Hibernate.isInitialized(entity.getParent())) {
             todo.setParentId(entity.getParent().getId());
         } else if (entity.getParent() != null) {
-            // proxy not initialized — still expose the id via the join column
+            // proxy not initialized - still expose the id via the join column
             todo.setParentId(entity.getParent().getId());
         }
 
