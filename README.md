@@ -116,6 +116,24 @@ Dev UI disponible en `http://localhost:8080/q/dev/` (solo modo dev).
 
 ---
 
+## Despliegue (Railway)
+
+El backend se despliega en **Railway** desde la rama `main` usando el `Dockerfile` de la raíz (compila con Maven y ejecuta el JAR). Variables necesarias en el servicio de Railway:
+
+```env
+DB_USERNAME=${{MySQL.MYSQLUSER}}
+DB_PASSWORD=${{MySQL.MYSQLPASSWORD}}
+DB_URL=jdbc:mysql://${{MySQL.MYSQLHOST}}:${{MySQL.MYSQLPORT}}/${{MySQL.MYSQLDATABASE}}
+DB_SCHEMA_STRATEGY=update
+FIREBASE_CREDENTIALS_B64=<JSON de Firebase Admin SDK en Base64>
+FIREBASE_CREDENTIALS_PATH=/tmp/firebase.json
+QUARKUS_HIBERNATE_ORM_SQL_LOAD_SCRIPT=no-file
+```
+
+> El JSON de Firebase se pasa en Base64 (`FIREBASE_CREDENTIALS_B64`) para evitar que se corrompa al pegarlo; el contenedor lo decodifica a `/tmp/firebase.json` al arrancar. La mensajería (Kafka/RabbitMQ) se ejecuta con el conector `in-memory` en producción, sin brokers externos.
+
+---
+
 ## Endpoints principales
 
 | Método | Ruta | Descripción | Auth |
@@ -141,9 +159,9 @@ Todos los endpoints protegidos requieren header:
 
 | Email | Contraseña | Descripción |
 |-------|-----------|-------------|
-| `test@example.com` | `Test1234!` | Usuario de prueba general |
+| `fer@gmail.com` | `Holamundo2026` | Usuario de prueba general |
 
-> Crea el usuario primero con `POST /users` o desde la pantalla de registro.
+> Para crear uno nuevo, usa `POST /users` o la pantalla de registro de la app.
 
 ---
 
