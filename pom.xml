@@ -97,11 +97,11 @@
             <artifactId>quarkus-messaging-rabbitmq</artifactId>
         </dependency>
 
-        <!-- In-memory connector para tests sin brokers reales -->
+        <!-- In-memory connector: usado en tests y en producción (Railway) para
+             correr la mensajería sin brokers Kafka/RabbitMQ reales -->
         <dependency>
             <groupId>io.smallrye.reactive</groupId>
             <artifactId>smallrye-reactive-messaging-in-memory</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
