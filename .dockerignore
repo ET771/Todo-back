@@ -1,5 +1,13 @@
-*
-!target/*-runner
-!target/*-runner.jar
-!target/lib/*
-!target/quarkus-app/*
+# Excluir artefactos de build y git del contexto Docker.
+# El Dockerfile multi-stage compila desde el código fuente (necesita src/, pom.xml,
+# mvnw, .mvn), así que NO ignoramos todo el contexto.
+target/
+.git/
+.idea/
+.vscode/
+*.iml
+
+# Seguridad: nunca incluir secretos en la imagen.
+# El JSON de Firebase se inyecta en runtime por variable de entorno.
+.env
+*firebase-adminsdk*.json
