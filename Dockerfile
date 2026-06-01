@@ -29,8 +29,10 @@ USER 185
 
 ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
 
-# Escribe el JSON de Firebase desde la variable secreta y luego arranca Quarkus.
+# Escribe el JSON de Firebase desde la variable y luego arranca Quarkus.
 # Se escribe en /tmp porque el usuario 185 sí tiene permiso de escritura ahí.
 # FIREBASE_CREDENTIALS_PATH debe valer /tmp/firebase.json en las variables de Railway.
+# El JSON se pasa preferentemente como FIREBASE_CREDENTIALS_B64 (Base64, a prueba de
+# corrupción al pegar); si no, se acepta FIREBASE_CREDENTIALS_JSON en texto plano.
 # Quarkus lee el puerto de la variable PORT que Railway inyecta automáticamente.
-ENTRYPOINT ["/bin/sh","-c","printf '%s' \"$FIREBASE_CREDENTIALS_JSON\" > /tmp/firebase.json && JAVA_APP_JAR=/deployments/quarkus-run.jar /opt/jboss/container/java/run/run-java.sh"]
+ENTRYPOINT ["/bin/sh","-c","if [ -n \"$FIREBASE_CREDENTIALS_B64\" ]; then echo \"$FIREBASE_CREDENTIALS_B64\" | base64 -d > /tmp/firebase.json; else printf '%s' \"$FIREBASE_CREDENTIALS_JSON\" > /tmp/firebase.json; fi && JAVA_APP_JAR=/deployments/quarkus-run.jar /opt/jboss/container/java/run/run-java.sh"]
