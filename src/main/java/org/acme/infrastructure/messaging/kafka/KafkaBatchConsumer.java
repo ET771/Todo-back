@@ -24,7 +24,7 @@ public class KafkaBatchConsumer {
     public void process(TodoBatchMessage msg) {
         String batchId = msg.batchId();
         stats.onStart(batchId);
-        System.out.println("[Kafka batch] batch=" + batchId + " procesando " + msg.todo().id() + " — " + msg.todo().title());
+        System.out.println("[Kafka batch] batch=" + batchId + " procesando " + msg.todo().id() + " - " + msg.todo().title());
         try {
             Thread.sleep(PROCESSING_MS);
             stats.onSuccess(batchId, msg.todo().title());
