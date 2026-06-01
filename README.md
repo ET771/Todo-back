@@ -9,8 +9,8 @@ Construido con **Quarkus 3** (Java 17), arquitectura limpia, Firebase Auth y MyS
 
 | Servicio | URL |
 |----------|-----|
-| **API (producción)** | https://equipo2-todo-crs-66787588163.us-central1.run.app |
-| **Health check** | https://equipo2-todo-crs-66787588163.us-central1.run.app/status |
+| **API (producción)** | https://todo-back-production-6d8b.up.railway.app |
+| **Health check** | https://todo-back-production-6d8b.up.railway.app/status |
 
 ---
 
