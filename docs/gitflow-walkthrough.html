@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Branching Strategy & Gitflow: Eliminar un ToDo</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --bg-2: #1e293b;
+    --bg-3: #334155;
+    --fg: #e2e8f0;
+    --fg-dim: #94a3b8;
+    --accent: #38bdf8;
+    --accent-2: #a78bfa;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+    --pink: #f472b6;
+    --border: #334155;
+    --code-bg: #0b1220;
+    --add: rgba(74, 222, 128, 0.12);
+    --add-border: #4ade80;
+    --del: rgba(248, 113, 113, 0.12);
+    --del-border: #f87171;
+
+    --c-main: #38bdf8;
+    --c-develop: #a78bfa;
+    --c-feature: #4ade80;
+    --c-bugfix: #f87171;
+    --c-release: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    line-height: 1.6;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    min-height: 100vh;
+  }
+  aside {
+    background: var(--bg-2);
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  aside h2 {
+    color: var(--accent);
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0 0 16px;
+  }
+  aside ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    counter-reset: step;
+  }
+  aside ol li {
+    counter-increment: step;
+    margin-bottom: 4px;
+  }
+  aside button.nav {
+    width: 100%;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--fg-dim);
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  aside button.nav::before {
+    content: counter(step);
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--bg-3);
+    color: var(--fg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  aside button.nav:hover {
+    background: var(--bg-3);
+    color: var(--fg);
+  }
+  aside button.nav.active {
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  aside button.nav.active::before {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  aside .legend {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  aside .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--fg-dim);
+    margin-bottom: 6px;
+  }
+  aside .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+
+  main {
+    padding: 40px 56px;
+    max-width: 1100px;
+  }
+  header.page-header {
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header.page-header h1 {
+    margin: 0 0 8px;
+    font-size: 28px;
+    color: var(--fg);
+  }
+  header.page-header p {
+    margin: 0;
+    color: var(--fg-dim);
+  }
+
+  .step {
+    display: none;
+    animation: fadeIn 0.3s ease;
+  }
+  .step.active { display: block; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .step h2 {
+    color: var(--accent);
+    font-size: 22px;
+    margin: 0 0 8px;
+  }
+  .step .subtitle {
+    color: var(--fg-dim);
+    margin: 0 0 24px;
+  }
+  .step p { margin: 12px 0; }
+  .step h3 {
+    color: var(--accent-2);
+    margin-top: 28px;
+    font-size: 16px;
+  }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Monaco, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  code {
+    font-family: "SF Mono", Monaco, Menlo, Consolas, monospace;
+    background: var(--bg-3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 13px;
+  }
+  .tok-cmd { color: var(--green); }
+  .tok-flag { color: var(--yellow); }
+  .tok-str { color: var(--accent); }
+  .tok-com { color: var(--fg-dim); font-style: italic; }
+  .tok-kw { color: var(--accent-2); }
+  .tok-add { color: var(--green); }
+  .tok-del { color: var(--red); }
+
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: rgba(56, 189, 248, 0.08);
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin: 16px 0;
+  }
+  .callout.warn {
+    border-color: var(--red);
+    background: rgba(248, 113, 113, 0.08);
+  }
+  .callout.bug {
+    border-color: var(--orange);
+    background: rgba(251, 146, 60, 0.08);
+  }
+  .callout.success {
+    border-color: var(--green);
+    background: rgba(74, 222, 128, 0.08);
+  }
+  .callout strong { color: var(--fg); }
+
+  .nav-buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+  .nav-buttons button {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    transition: all 0.15s;
+  }
+  .nav-buttons button:hover:not(:disabled) {
+    background: var(--bg-3);
+    border-color: var(--accent);
+  }
+  .nav-buttons button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Git graph */
+  .git-graph {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    margin: 20px 0;
+    overflow-x: auto;
+  }
+  .git-graph svg {
+    display: block;
+    min-width: 700px;
+  }
+  .git-graph .branch-label {
+    fill: var(--fg);
+    font-family: "SF Mono", Monaco, Menlo, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .git-graph .commit-label {
+    fill: var(--fg-dim);
+    font-family: "SF Mono", Monaco, Menlo, Consolas, monospace;
+    font-size: 10px;
+  }
+  .git-graph .commit {
+    transition: all 0.3s;
+  }
+  .git-graph .commit.highlight {
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+  .git-graph .commit.bug {
+    stroke: var(--orange);
+    stroke-width: 3;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--accent);
+    font-weight: 600;
+    background: var(--bg-2);
+  }
+  td code { font-size: 11px; }
+
+  .file-diff {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 16px 0;
+    overflow: hidden;
+  }
+  .file-diff .file-header {
+    background: var(--bg-2);
+    padding: 8px 14px;
+    font-family: "SF Mono", Monaco, Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--fg-dim);
+    border-bottom: 1px solid var(--border);
+  }
+  .file-diff pre { border: none; border-radius: 0; margin: 0; }
+  .diff-add { background: var(--add); display: block; padding: 0 16px; margin: 0 -16px; border-left: 3px solid var(--add-border); }
+  .diff-del { background: var(--del); display: block; padding: 0 16px; margin: 0 -16px; border-left: 3px solid var(--del-border); }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 4px;
+  }
+  .pill.main { background: rgba(56, 189, 248, 0.18); color: var(--c-main); }
+  .pill.develop { background: rgba(167, 139, 250, 0.18); color: var(--c-develop); }
+  .pill.feature { background: rgba(74, 222, 128, 0.18); color: var(--c-feature); }
+  .pill.bugfix { background: rgba(248, 113, 113, 0.18); color: var(--c-bugfix); }
+  .pill.release { background: rgba(251, 191, 36, 0.18); color: var(--c-release); }
+
+  .progress {
+    height: 4px;
+    background: var(--bg-3);
+    border-radius: 2px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition: width 0.3s ease;
+  }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; }
+    main { padding: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <h2>Pasos del flujo</h2>
+    <ol id="navList"></ol>
+    <div class="legend">
+      <h2>Ramas</h2>
+      <div class="legend-item"><span class="legend-dot" style="background: var(--c-main)"></span>main (producción)</div>
+      <div class="legend-item"><span class="legend-dot" style="background: var(--c-develop)"></span>develop (integración)</div>
+      <div class="legend-item"><span class="legend-dot" style="background: var(--c-feature)"></span>feature/*</div>
+      <div class="legend-item"><span class="legend-dot" style="background: var(--c-bugfix)"></span>bugfix/*</div>
+      <div class="legend-item"><span class="legend-dot" style="background: var(--c-release)"></span>release/*</div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="page-header">
+      <h1>Branching Strategy &amp; Gitflow</h1>
+      <p>Walkthrough interactivo: implementar <strong>eliminar un ToDo</strong>, introducir un bug intencional y resolverlo con una rama <code>bugfix/*</code>.</p>
+    </header>
+
+    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+    <!-- ============ STEP 1 ============ -->
+    <section class="step" data-title="Intro a Gitflow">
+      <h2>1. ¿Qué es Gitflow?</h2>
+      <p class="subtitle">Una estrategia de ramas con roles bien definidos para cada tipo de trabajo.</p>
+
+      <p>Gitflow organiza el repositorio en torno a dos ramas de larga vida y varias ramas auxiliares de corta vida:</p>
+
+      <table>
+        <thead>
+          <tr><th>Rama</th><th>Propósito</th><th>Origen</th><th>Merge a</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill main">main</span></td>
+            <td>Código en producción. Cada commit es una versión liberada.</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="pill develop">develop</span></td>
+            <td>Integración continua. Lo último estable que aún no se libera.</td>
+            <td><code>main</code></td>
+            <td><code>release/*</code></td>
+          </tr>
+          <tr>
+            <td><span class="pill feature">feature/*</span></td>
+            <td>Nueva funcionalidad (ej. eliminar un ToDo).</td>
+            <td><code>develop</code></td>
+            <td><code>develop</code></td>
+          </tr>
+          <tr>
+            <td><span class="pill bugfix">bugfix/*</span></td>
+            <td>Corrección de un bug detectado en <code>develop</code> antes de liberar.</td>
+            <td><code>develop</code></td>
+            <td><code>develop</code></td>
+          </tr>
+          <tr>
+            <td><span class="pill release">release/*</span></td>
+            <td>Estabilización previa al lanzamiento.</td>
+            <td><code>develop</code></td>
+            <td><code>main</code> + <code>develop</code></td>
+          </tr>
+          <tr>
+            <td><span class="pill" style="background:rgba(244,114,182,.18); color:var(--pink)">hotfix/*</span></td>
+            <td>Parches urgentes en producción.</td>
+            <td><code>main</code></td>
+            <td><code>main</code> + <code>develop</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>Caso de hoy:</strong> Vamos a agregar el endpoint <code>DELETE /todos/{id}</code> al proyecto Quarkus. Durante el desarrollo introduciremos un bug a propósito (eliminar siempre el ID 1) para demostrar cuándo y cómo se crea una rama <code>bugfix/*</code>.
+      </div>
+    </section>
+
+    <!-- ============ STEP 2 ============ -->
+    <section class="step" data-title="Estado inicial">
+      <h2>2. Estado inicial del repo</h2>
+      <p class="subtitle">Partimos de <code>develop</code> sincronizada con <code>main</code>.</p>
+
+      <div class="git-graph" id="graph-step2"></div>
+
+      <p>Antes de empezar cualquier trabajo, sincronizamos las ramas locales:</p>
+      <pre><code><span class="tok-com"># Asegurarnos de tener lo último</span>
+<span class="tok-cmd">git</span> checkout develop
+<span class="tok-cmd">git</span> pull origin develop</code></pre>
+
+      <div class="callout">
+        <strong>Regla de oro:</strong> nunca trabajes directamente en <code>main</code> ni en <code>develop</code>. Toda nueva funcionalidad o corrección vive en una rama auxiliar.
+      </div>
+    </section>
+
+    <!-- ============ STEP 3 ============ -->
+    <section class="step" data-title="Crear feature branch">
+      <h2>3. Crear la rama <span class="pill feature">feature/delete-todo</span></h2>
+      <p class="subtitle">Una rama por funcionalidad. Nombre descriptivo y en kebab-case.</p>
+
+      <pre><code><span class="tok-cmd">git</span> checkout develop
+<span class="tok-cmd">git</span> checkout <span class="tok-flag">-b</span> feature/delete-todo</code></pre>
+
+      <p>Convenciones de nombrado típicas:</p>
+      <ul>
+        <li><code>feature/&lt;ticket&gt;-&lt;descripcion-corta&gt;</code> — ej. <code>feature/TODO-42-delete-todo</code></li>
+        <li>Solo minúsculas, separadas por guiones.</li>
+        <li>Prefijo coherente con el tipo de trabajo (<code>feature</code>, <code>bugfix</code>, <code>hotfix</code>).</li>
+      </ul>
+
+      <div class="git-graph" id="graph-step3"></div>
+    </section>
+
+    <!-- ============ STEP 4 ============ -->
+    <section class="step" data-title="Implementar feature">
+      <h2>4. Implementar el endpoint DELETE</h2>
+      <p class="subtitle">Agregamos el método al recurso REST… con un bug a propósito.</p>
+
+      <p>Editamos <code>TodoResource.java</code>:</p>
+
+      <div class="file-diff">
+        <div class="file-header">src/main/java/.../TodoResource.java</div>
+        <pre><code><span class="tok-kw">@Path</span>(<span class="tok-str">"/todos"</span>)
+<span class="tok-kw">public class</span> TodoResource {
+
+    <span class="tok-kw">@Inject</span> TodoRepository repo;
+
+    <span class="tok-com">// ... GET, POST existentes ...</span>
+
+<span class="diff-add">+    <span class="tok-kw">@DELETE</span></span>
+<span class="diff-add">+    <span class="tok-kw">@Path</span>(<span class="tok-str">"/{id}"</span>)</span>
+<span class="diff-add">+    <span class="tok-kw">@Transactional</span></span>
+<span class="diff-add">+    <span class="tok-kw">public</span> Response delete(<span class="tok-kw">@PathParam</span>(<span class="tok-str">"id"</span>) Long id) {</span>
+<span class="diff-add">+        <span class="tok-com">// 🐛 BUG INTENCIONAL: ignoramos el id recibido</span></span>
+<span class="diff-add">+        <span class="tok-com">//    y siempre borramos el ToDo con id = 1</span></span>
+<span class="diff-add">+        <span class="tok-kw">boolean</span> deleted = repo.deleteById(1L);</span>
+<span class="diff-add">+        <span class="tok-kw">return</span> deleted</span>
+<span class="diff-add">+            ? Response.noContent().build()</span>
+<span class="diff-add">+            : Response.status(404).build();</span>
+<span class="diff-add">+    }</span>
+}</code></pre>
+      </div>
+
+      <div class="callout bug">
+        <strong>🐛 Bug introducido a propósito:</strong> el método recibe <code>id</code> pero llama a <code>repo.deleteById(1L)</code>. Cualquier petición <code>DELETE /todos/{id}</code> borra siempre el ToDo con ID 1, sin importar el valor del path.
+      </div>
+
+      <p>Hacemos commits pequeños y descriptivos:</p>
+      <pre><code><span class="tok-cmd">git</span> add src/main/java/.../TodoResource.java
+<span class="tok-cmd">git</span> commit <span class="tok-flag">-m</span> <span class="tok-str">"feat(todo): add DELETE /todos/{id} endpoint"</span></code></pre>
+    </section>
+
+    <!-- ============ STEP 5 ============ -->
+    <section class="step" data-title="PR a develop">
+      <h2>5. Pull Request a <span class="pill develop">develop</span></h2>
+      <p class="subtitle">Subimos la rama y abrimos un PR para revisión.</p>
+
+      <pre><code><span class="tok-cmd">git</span> push <span class="tok-flag">-u</span> origin feature/delete-todo</code></pre>
+
+      <p>En GitHub se abre el Pull Request con destino <code>develop</code>:</p>
+
+      <pre><code><span class="tok-com">Title:</span>  feat(todo): add DELETE /todos/{id} endpoint
+<span class="tok-com">Base:</span>   develop
+<span class="tok-com">Compare:</span> feature/delete-todo
+
+<span class="tok-com">Description:</span>
+- Adds DELETE endpoint to TodoResource
+- Returns 204 on success, 404 if not found
+- Closes #42</code></pre>
+
+      <div class="callout">
+        <strong>Code review:</strong> el revisor aprueba el PR porque la lógica "se ve bien". Los tests existentes pasan porque <strong>no había test específico</strong> que verificara que se elimina el ID correcto. <em>(Foreshadowing…)</em>
+      </div>
+
+      <p>Después del merge, <code>develop</code> contiene la nueva funcionalidad:</p>
+      <div class="git-graph" id="graph-step5"></div>
+    </section>
+
+    <!-- ============ STEP 6 ============ -->
+    <section class="step" data-title="Bug detectado">
+      <h2>6. QA detecta el bug 🐛</h2>
+      <p class="subtitle">En la rama <code>develop</code>, durante pruebas exploratorias, alguien nota algo raro.</p>
+
+      <p>Reporte de QA:</p>
+      <pre><code><span class="tok-com">### Steps to reproduce</span>
+1. POST /todos {"title":"comprar pan"}   <span class="tok-com">→ id=1</span>
+2. POST /todos {"title":"sacar basura"}  <span class="tok-com">→ id=2</span>
+3. POST /todos {"title":"estudiar"}      <span class="tok-com">→ id=3</span>
+4. DELETE /todos/3                       <span class="tok-com">→ 204 ✅</span>
+5. GET /todos                            <span class="tok-com">→ [{id:2,...}, {id:3,...}]</span>
+
+<span class="tok-com">### Expected</span>
+El ToDo con id=3 debe haberse borrado.
+
+<span class="tok-com">### Actual</span>
+Se borró el ToDo con id=1. 😱</code></pre>
+
+      <div class="callout warn">
+        <strong>Decisión:</strong> el bug está en <code>develop</code>, todavía no llegó a <code>main</code>. Por lo tanto se corrige con una rama <code>bugfix/*</code> (no <code>hotfix/*</code>, que sería para producción).
+      </div>
+
+      <h3>¿bugfix o hotfix?</h3>
+      <table>
+        <thead><tr><th></th><th>bugfix/*</th><th>hotfix/*</th></tr></thead>
+        <tbody>
+          <tr><td>¿Dónde está el bug?</td><td>en <code>develop</code></td><td>en <code>main</code> (producción)</td></tr>
+          <tr><td>Origen de la rama</td><td><code>develop</code></td><td><code>main</code></td></tr>
+          <tr><td>Merge a</td><td><code>develop</code></td><td><code>main</code> + <code>develop</code></td></tr>
+          <tr><td>Urgencia</td><td>normal</td><td>alta — usuarios afectados</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ============ STEP 7 ============ -->
+    <section class="step" data-title="Crear bugfix branch">
+      <h2>7. Crear <span class="pill bugfix">bugfix/delete-todo-wrong-id</span></h2>
+      <p class="subtitle">Rama corta, enfocada en una sola corrección.</p>
+
+      <pre><code><span class="tok-cmd">git</span> checkout develop
+<span class="tok-cmd">git</span> pull origin develop
+<span class="tok-cmd">git</span> checkout <span class="tok-flag">-b</span> bugfix/delete-todo-wrong-id</code></pre>
+
+      <div class="git-graph" id="graph-step7"></div>
+
+      <p>Antes de tocar el código de producción, escribimos un test que <strong>falle</strong> y exponga el bug. Esto nos garantiza que la corrección efectivamente arregla el problema y evita regresiones futuras.</p>
+
+      <div class="file-diff">
+        <div class="file-header">src/test/java/.../TodoResourceTest.java</div>
+        <pre><code><span class="diff-add">+    <span class="tok-kw">@Test</span></span>
+<span class="diff-add">+    <span class="tok-kw">void</span> deleteShouldRemoveTheRequestedId() {</span>
+<span class="diff-add">+        Long id1 = createTodo(<span class="tok-str">"a"</span>);</span>
+<span class="diff-add">+        Long id2 = createTodo(<span class="tok-str">"b"</span>);</span>
+<span class="diff-add">+</span>
+<span class="diff-add">+        given().when().delete(<span class="tok-str">"/todos/"</span> + id2)</span>
+<span class="diff-add">+              .then().statusCode(204);</span>
+<span class="diff-add">+</span>
+<span class="diff-add">+        given().when().get(<span class="tok-str">"/todos"</span>)</span>
+<span class="diff-add">+              .then().body(<span class="tok-str">"id"</span>, hasItem(id1.intValue()))</span>
+<span class="diff-add">+                    .body(<span class="tok-str">"id"</span>, not(hasItem(id2.intValue())));</span>
+<span class="diff-add">+    }</span></code></pre>
+      </div>
+
+      <pre><code><span class="tok-cmd">./mvnw</span> test
+<span class="tok-com"># → FAILED: deleteShouldRemoveTheRequestedId  ❌</span>
+<span class="tok-com">#   Expected id=2 to be removed, but id=1 was deleted instead.</span></code></pre>
+
+      <div class="callout success">
+        El test rojo confirma que reproducimos el bug. Ahora podemos arreglarlo con confianza.
+      </div>
+    </section>
+
+    <!-- ============ STEP 8 ============ -->
+    <section class="step" data-title="Aplicar fix">
+      <h2>8. Aplicar el fix</h2>
+      <p class="subtitle">Cambio mínimo: usar el <code>id</code> recibido en lugar de la constante.</p>
+
+      <div class="file-diff">
+        <div class="file-header">src/main/java/.../TodoResource.java</div>
+        <pre><code>    <span class="tok-kw">@DELETE</span>
+    <span class="tok-kw">@Path</span>(<span class="tok-str">"/{id}"</span>)
+    <span class="tok-kw">@Transactional</span>
+    <span class="tok-kw">public</span> Response delete(<span class="tok-kw">@PathParam</span>(<span class="tok-str">"id"</span>) Long id) {
+<span class="diff-del">-        <span class="tok-com">// 🐛 BUG INTENCIONAL: ignoramos el id recibido</span></span>
+<span class="diff-del">-        <span class="tok-com">//    y siempre borramos el ToDo con id = 1</span></span>
+<span class="diff-del">-        <span class="tok-kw">boolean</span> deleted = repo.deleteById(1L);</span>
+<span class="diff-add">+        <span class="tok-kw">boolean</span> deleted = repo.deleteById(id);</span>
+        <span class="tok-kw">return</span> deleted
+            ? Response.noContent().build()
+            : Response.status(404).build();
+    }</code></pre>
+      </div>
+
+      <pre><code><span class="tok-cmd">./mvnw</span> test
+<span class="tok-com"># → Tests run: 12, Failures: 0  ✅</span></code></pre>
+
+      <p>Commits del bugfix:</p>
+      <pre><code><span class="tok-cmd">git</span> add src/test/java/.../TodoResourceTest.java
+<span class="tok-cmd">git</span> commit <span class="tok-flag">-m</span> <span class="tok-str">"test(todo): expose delete-by-id bug"</span>
+
+<span class="tok-cmd">git</span> add src/main/java/.../TodoResource.java
+<span class="tok-cmd">git</span> commit <span class="tok-flag">-m</span> <span class="tok-str">"fix(todo): use path id instead of hardcoded 1"</span></code></pre>
+    </section>
+
+    <!-- ============ STEP 9 ============ -->
+    <section class="step" data-title="Merge del bugfix">
+      <h2>9. Merge del bugfix a <span class="pill develop">develop</span></h2>
+      <p class="subtitle">PR pequeño, enfocado, fácil de revisar.</p>
+
+      <pre><code><span class="tok-cmd">git</span> push <span class="tok-flag">-u</span> origin bugfix/delete-todo-wrong-id</code></pre>
+
+      <p>El PR del bugfix incluye:</p>
+      <ul>
+        <li>Un test que reproduce el bug (rojo antes del fix).</li>
+        <li>El cambio mínimo que arregla el comportamiento.</li>
+        <li>Referencia al issue/reporte de QA.</li>
+      </ul>
+
+      <p>Tras el merge, el grafo del repo queda así:</p>
+      <div class="git-graph" id="graph-step9"></div>
+
+      <p>Borramos la rama remota y local (higiene):</p>
+      <pre><code><span class="tok-cmd">git</span> checkout develop
+<span class="tok-cmd">git</span> pull origin develop
+<span class="tok-cmd">git</span> branch <span class="tok-flag">-d</span> bugfix/delete-todo-wrong-id
+<span class="tok-cmd">git</span> push origin <span class="tok-flag">--delete</span> bugfix/delete-todo-wrong-id</code></pre>
+    </section>
+
+    <!-- ============ STEP 10 ============ -->
+    <section class="step" data-title="Release a main">
+      <h2>10. De <code>develop</code> a <span class="pill main">main</span></h2>
+      <p class="subtitle">Cuando <code>develop</code> está estable, se libera vía <code>release/*</code>.</p>
+
+      <pre><code><span class="tok-cmd">git</span> checkout develop
+<span class="tok-cmd">git</span> checkout <span class="tok-flag">-b</span> release/1.1.0
+<span class="tok-com"># Bump versions, changelog, smoke tests…</span>
+<span class="tok-cmd">git</span> commit <span class="tok-flag">-am</span> <span class="tok-str">"chore(release): 1.1.0"</span>
+
+<span class="tok-com"># Merge a main y tag</span>
+<span class="tok-cmd">git</span> checkout main
+<span class="tok-cmd">git</span> merge <span class="tok-flag">--no-ff</span> release/1.1.0
+<span class="tok-cmd">git</span> tag <span class="tok-flag">-a</span> v1.1.0 <span class="tok-flag">-m</span> <span class="tok-str">"Release 1.1.0"</span>
+
+<span class="tok-com"># Merge de regreso a develop por si hubo fixes en release</span>
+<span class="tok-cmd">git</span> checkout develop
+<span class="tok-cmd">git</span> merge <span class="tok-flag">--no-ff</span> release/1.1.0</code></pre>
+
+      <div class="git-graph" id="graph-step10"></div>
+
+      <div class="callout success">
+        <strong>Resultado:</strong> el feature <em>delete a ToDo</em> llegó a producción <em>sin</em> el bug, gracias a que la estrategia de ramas nos dio un espacio (<code>develop</code> + <code>bugfix/*</code>) para detectarlo y corregirlo antes del release.
+      </div>
+
+      <h3>Lecciones clave</h3>
+      <ul>
+        <li><strong>Ramas auxiliares cortas y enfocadas.</strong> Una rama, un propósito.</li>
+        <li><strong>Test antes que fix.</strong> Un test rojo es la mejor prueba de que reproduces el bug.</li>
+        <li><strong>bugfix/* vs hotfix/*.</strong> El destino del bug determina la rama, no la urgencia subjetiva.</li>
+        <li><strong>Code review</strong> no sustituye a los tests automáticos: ambos atrapan cosas distintas.</li>
+        <li><strong><code>develop</code> es tu red de seguridad.</strong> Mientras el bug esté ahí y no en <code>main</code>, los usuarios siguen felices.</li>
+      </ul>
+    </section>
+
+    <div class="nav-buttons">
+      <button id="prevBtn">← Anterior</button>
+      <button id="nextBtn">Siguiente →</button>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ---------- Navigation ----------
+  const steps = document.querySelectorAll('.step');
+  const navList = document.getElementById('navList');
+  const progressBar = document.getElementById('progressBar');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  let current = 0;
+
+  steps.forEach((s, i) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.className = 'nav';
+    btn.textContent = s.dataset.title;
+    btn.addEventListener('click', () => goTo(i));
+    li.appendChild(btn);
+    navList.appendChild(li);
+  });
+
+  function goTo(i) {
+    current = Math.max(0, Math.min(steps.length - 1, i));
+    steps.forEach((s, idx) => s.classList.toggle('active', idx === current));
+    document.querySelectorAll('aside button.nav').forEach((b, idx) =>
+      b.classList.toggle('active', idx === current)
+    );
+    progressBar.style.width = ((current + 1) / steps.length * 100) + '%';
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === steps.length - 1;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  prevBtn.addEventListener('click', () => goTo(current - 1));
+  nextBtn.addEventListener('click', () => goTo(current + 1));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') goTo(current - 1);
+    if (e.key === 'ArrowRight') goTo(current + 1);
+  });
+
+  goTo(0);
+
+  // ---------- Git graph rendering ----------
+  // Each graph is a list of "lanes" (branches) and commits with x positions.
+  const COLORS = {
+    main:    '#38bdf8',
+    develop: '#a78bfa',
+    feature: '#4ade80',
+    bugfix:  '#f87171',
+    release: '#fbbf24'
+  };
+
+  function renderGraph(svgId, config) {
+    const container = document.getElementById(svgId);
+    if (!container) return;
+
+    const laneHeight = 60;
+    const colWidth = 90;
+    const leftPad = 130;
+    const topPad = 30;
+    const width = leftPad + config.cols * colWidth + 60;
+    const height = topPad + config.lanes.length * laneHeight + 30;
+
+    let svg = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`;
+
+    // Lane labels and base lines
+    config.lanes.forEach((lane, i) => {
+      const y = topPad + i * laneHeight;
+      svg += `<text x="10" y="${y + 5}" class="branch-label" fill="${COLORS[lane.type]}">${lane.name}</text>`;
+      // baseline (dotted)
+      if (lane.from !== undefined && lane.to !== undefined) {
+        const x1 = leftPad + lane.from * colWidth;
+        const x2 = leftPad + lane.to * colWidth;
+        svg += `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${COLORS[lane.type]}" stroke-width="2" opacity="0.45"/>`;
+      }
+    });
+
+    // Edges (branch off / merge)
+    (config.edges || []).forEach(e => {
+      const fromY = topPad + e.fromLane * laneHeight;
+      const toY = topPad + e.toLane * laneHeight;
+      const x1 = leftPad + e.fromCol * colWidth;
+      const x2 = leftPad + e.toCol * colWidth;
+      const cx = (x1 + x2) / 2;
+      svg += `<path d="M ${x1} ${fromY} C ${cx} ${fromY}, ${cx} ${toY}, ${x2} ${toY}"
+                fill="none" stroke="${COLORS[e.color]}" stroke-width="2" opacity="0.8"/>`;
+    });
+
+    // Commits
+    config.commits.forEach(c => {
+      const x = leftPad + c.col * colWidth;
+      const y = topPad + c.lane * laneHeight;
+      const color = COLORS[c.color];
+      const isBug = c.bug;
+      svg += `<circle class="commit ${isBug ? 'bug' : ''}" cx="${x}" cy="${y}" r="9"
+                fill="${color}" stroke="${isBug ? '#fb923c' : '#0b1220'}"
+                stroke-width="${isBug ? 3 : 2}" />`;
+      if (c.label) {
+        svg += `<text x="${x}" y="${y + 24}" class="commit-label" text-anchor="middle">${c.label}</text>`;
+      }
+      if (c.tag) {
+        svg += `<rect x="${x - 22}" y="${y - 28}" width="44" height="16" rx="3"
+                  fill="${color}" opacity="0.25" stroke="${color}"/>`;
+        svg += `<text x="${x}" y="${y - 16}" class="commit-label" text-anchor="middle"
+                  fill="${color}" style="font-weight:600">${c.tag}</text>`;
+      }
+    });
+
+    svg += '</svg>';
+    container.innerHTML = svg;
+  }
+
+  // ---- Step 2: just main and develop in sync ----
+  renderGraph('graph-step2', {
+    cols: 4,
+    lanes: [
+      { name: 'main',    type: 'main',    from: 0, to: 3 },
+      { name: 'develop', type: 'develop', from: 0, to: 3 }
+    ],
+    edges: [
+      { fromLane: 0, fromCol: 0, toLane: 1, toCol: 0, color: 'develop' }
+    ],
+    commits: [
+      { lane: 0, col: 0, color: 'main',    label: 'v1.0.0', tag: 'v1.0' },
+      { lane: 1, col: 1, color: 'develop', label: 'init' },
+      { lane: 1, col: 2, color: 'develop', label: 'todos' },
+      { lane: 1, col: 3, color: 'develop', label: 'auth' }
+    ]
+  });
+
+  // ---- Step 3: feature branch created ----
+  renderGraph('graph-step3', {
+    cols: 5,
+    lanes: [
+      { name: 'main',                 type: 'main',    from: 0, to: 4 },
+      { name: 'develop',              type: 'develop', from: 0, to: 4 },
+      { name: 'feature/delete-todo',  type: 'feature', from: 4, to: 4 }
+    ],
+    edges: [
+      { fromLane: 1, fromCol: 3, toLane: 2, toCol: 4, color: 'feature' }
+    ],
+    commits: [
+      { lane: 0, col: 0, color: 'main',    tag: 'v1.0' },
+      { lane: 1, col: 1, color: 'develop' },
+      { lane: 1, col: 2, color: 'develop' },
+      { lane: 1, col: 3, color: 'develop', label: 'HEAD~' },
+      { lane: 2, col: 4, color: 'feature', label: 'branch off' }
+    ]
+  });
+
+  // ---- Step 5: feature merged into develop (with bug) ----
+  renderGraph('graph-step5', {
+    cols: 7,
+    lanes: [
+      { name: 'main',                type: 'main',    from: 0, to: 6 },
+      { name: 'develop',             type: 'develop', from: 0, to: 6 },
+      { name: 'feature/delete-todo', type: 'feature', from: 4, to: 5 }
+    ],
+    edges: [
+      { fromLane: 1, fromCol: 3, toLane: 2, toCol: 4, color: 'feature' },
+      { fromLane: 2, fromCol: 5, toLane: 1, toCol: 6, color: 'feature' }
+    ],
+    commits: [
+      { lane: 0, col: 0, color: 'main',    tag: 'v1.0' },
+      { lane: 1, col: 1, color: 'develop' },
+      { lane: 1, col: 2, color: 'develop' },
+      { lane: 1, col: 3, color: 'develop' },
+      { lane: 2, col: 4, color: 'feature', label: 'add DELETE' },
+      { lane: 2, col: 5, color: 'feature', label: 'wire route', bug: true },
+      { lane: 1, col: 6, color: 'develop', label: 'merge 🐛', bug: true }
+    ]
+  });
+
+  // ---- Step 7: bugfix branch created off develop ----
+  renderGraph('graph-step7', {
+    cols: 8,
+    lanes: [
+      { name: 'main',                       type: 'main',    from: 0, to: 7 },
+      { name: 'develop',                    type: 'develop', from: 0, to: 7 },
+      { name: 'feature/delete-todo',        type: 'feature', from: 4, to: 5 },
+      { name: 'bugfix/delete-todo-wrong-id',type: 'bugfix',  from: 7, to: 7 }
+    ],
+    edges: [
+      { fromLane: 1, fromCol: 3, toLane: 2, toCol: 4, color: 'feature' },
+      { fromLane: 2, fromCol: 5, toLane: 1, toCol: 6, color: 'feature' },
+      { fromLane: 1, fromCol: 6, toLane: 3, toCol: 7, color: 'bugfix' }
+    ],
+    commits: [
+      { lane: 0, col: 0, color: 'main',    tag: 'v1.0' },
+      { lane: 1, col: 1, color: 'develop' },
+      { lane: 1, col: 2, color: 'develop' },
+      { lane: 1, col: 3, color: 'develop' },
+      { lane: 2, col: 4, color: 'feature' },
+      { lane: 2, col: 5, color: 'feature', bug: true },
+      { lane: 1, col: 6, color: 'develop', label: 'merge 🐛', bug: true },
+      { lane: 3, col: 7, color: 'bugfix',  label: 'branch off' }
+    ]
+  });
+
+  // ---- Step 9: bugfix merged back into develop ----
+  renderGraph('graph-step9', {
+    cols: 10,
+    lanes: [
+      { name: 'main',                        type: 'main',    from: 0, to: 9 },
+      { name: 'develop',                     type: 'develop', from: 0, to: 9 },
+      { name: 'feature/delete-todo',         type: 'feature', from: 4, to: 5 },
+      { name: 'bugfix/delete-todo-wrong-id', type: 'bugfix',  from: 7, to: 8 }
+    ],
+    edges: [
+      { fromLane: 1, fromCol: 3, toLane: 2, toCol: 4, color: 'feature' },
+      { fromLane: 2, fromCol: 5, toLane: 1, toCol: 6, color: 'feature' },
+      { fromLane: 1, fromCol: 6, toLane: 3, toCol: 7, color: 'bugfix' },
+      { fromLane: 3, fromCol: 8, toLane: 1, toCol: 9, color: 'bugfix' }
+    ],
+    commits: [
+      { lane: 0, col: 0, color: 'main',    tag: 'v1.0' },
+      { lane: 1, col: 1, color: 'develop' },
+      { lane: 1, col: 2, color: 'develop' },
+      { lane: 1, col: 3, color: 'develop' },
+      { lane: 2, col: 4, color: 'feature' },
+      { lane: 2, col: 5, color: 'feature', bug: true },
+      { lane: 1, col: 6, color: 'develop', bug: true },
+      { lane: 3, col: 7, color: 'bugfix',  label: 'red test' },
+      { lane: 3, col: 8, color: 'bugfix',  label: 'fix' },
+      { lane: 1, col: 9, color: 'develop', label: 'merge ✅' }
+    ]
+  });
+
+  // ---- Step 10: release tagged on main ----
+  renderGraph('graph-step10', {
+    cols: 12,
+    lanes: [
+      { name: 'main',                        type: 'main',    from: 0, to: 11 },
+      { name: 'develop',                     type: 'develop', from: 0, to: 11 },
+      { name: 'feature/delete-todo',         type: 'feature', from: 4, to: 5 },
+      { name: 'bugfix/delete-todo-wrong-id', type: 'bugfix',  from: 7, to: 8 },
+      { name: 'release/1.1.0',               type: 'release', from: 10, to: 10 }
+    ],
+    edges: [
+      { fromLane: 1, fromCol: 3, toLane: 2, toCol: 4, color: 'feature' },
+      { fromLane: 2, fromCol: 5, toLane: 1, toCol: 6, color: 'feature' },
+      { fromLane: 1, fromCol: 6, toLane: 3, toCol: 7, color: 'bugfix' },
+      { fromLane: 3, fromCol: 8, toLane: 1, toCol: 9, color: 'bugfix' },
+      { fromLane: 1, fromCol: 9, toLane: 4, toCol: 10, color: 'release' },
+      { fromLane: 4, fromCol: 10, toLane: 0, toCol: 11, color: 'release' },
+      { fromLane: 4, fromCol: 10, toLane: 1, toCol: 11, color: 'release' }
+    ],
+    commits: [
+      { lane: 0, col: 0,  color: 'main',    tag: 'v1.0' },
+      { lane: 1, col: 1,  color: 'develop' },
+      { lane: 1, col: 2,  color: 'develop' },
+      { lane: 1, col: 3,  color: 'develop' },
+      { lane: 2, col: 4,  color: 'feature' },
+      { lane: 2, col: 5,  color: 'feature', bug: true },
+      { lane: 1, col: 6,  color: 'develop', bug: true },
+      { lane: 3, col: 7,  color: 'bugfix' },
+      { lane: 3, col: 8,  color: 'bugfix' },
+      { lane: 1, col: 9,  color: 'develop' },
+      { lane: 4, col: 10, color: 'release', label: 'bump' },
+      { lane: 0, col: 11, color: 'main',    tag: 'v1.1' },
+      { lane: 1, col: 11, color: 'develop', label: 'sync' }
+    ]
+  });
+</script>
+</body>
+</html>

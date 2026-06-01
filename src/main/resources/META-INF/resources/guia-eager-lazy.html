@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Guia interactiva: Eager vs Lazy y N+1 con Hibernate</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-2: #161b22;
+    --bg-3: #1f2630;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --good: #3fb950;
+    --warn: #d29922;
+    --bad: #f85149;
+    --purple: #bc8cff;
+    --orange: #f0883e;
+    --border: #30363d;
+    --code-bg: #0b0f15;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+  }
+  header {
+    background: linear-gradient(135deg, #1f2630 0%, #0d1117 100%);
+    padding: 60px 24px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    margin: 0 0 12px;
+    font-size: 2.4rem;
+    background: linear-gradient(135deg, #58a6ff, #bc8cff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  header p { margin: 0; color: var(--muted); font-size: 1.1rem; }
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  section {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 28px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03);
+  }
+  section h2 {
+    margin-top: 0;
+    color: var(--accent);
+    font-size: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+  }
+  section.good  { border-left: 4px solid var(--good); }
+  section.bad   { border-left: 4px solid var(--bad); }
+  section.warn  { border-left: 4px solid var(--warn); }
+  section.info  { border-left: 4px solid var(--accent); }
+  section.purple{ border-left: 4px solid var(--purple); }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-size: 0.88rem;
+  }
+  code { font-family: "JetBrains Mono", "Fira Code", monospace; color: #d2a8ff; }
+  pre code { color: #c9d1d9; }
+  .btn {
+    background: linear-gradient(135deg, #238636, #2ea043);
+    color: white;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.06s ease;
+    margin: 4px 6px 4px 0;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.bad  { background: linear-gradient(135deg, #b62324, #f85149); }
+  .btn.warn { background: linear-gradient(135deg, #9e6a03, #d29922); }
+  .btn.info { background: linear-gradient(135deg, #1f6feb, #58a6ff); }
+  .btn.purple { background: linear-gradient(135deg, #6e40c9, #bc8cff); }
+  .btn.big  { padding: 14px 24px; font-size: 1.05rem; }
+  .result {
+    margin-top: 18px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    display: none;
+  }
+  .result.show { display: block; }
+  .metric-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-bottom: 14px;
+  }
+  .metric {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    flex: 1 1 140px;
+    text-align: center;
+  }
+  .metric .label { font-size: 0.78rem; text-transform: uppercase; color: var(--muted); letter-spacing: 0.06em; }
+  .metric .value { font-size: 1.9rem; font-weight: 700; margin-top: 4px; }
+  .metric.q .value { color: var(--accent); }
+  .metric.q.bad .value { color: var(--bad); }
+  .metric.q.good .value { color: var(--good); }
+  .metric.t .value { color: var(--warn); }
+  .metric.r .value { color: var(--purple); }
+  .explain {
+    background: var(--bg);
+    border-left: 3px solid var(--accent);
+    padding: 12px 14px;
+    border-radius: 4px;
+    color: var(--muted);
+    font-size: 0.93rem;
+  }
+  .err {
+    background: #2d0f12;
+    border: 1px solid var(--bad);
+    color: #ffb4ab;
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 0.85rem;
+    margin-top: 12px;
+  }
+  ul.sample {
+    margin: 12px 0 0;
+    padding-left: 20px;
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+  ul.sample li { margin-bottom: 4px; }
+  details.json-box {
+    margin-top: 14px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  details.json-box summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-size: 0.85rem;
+    font-weight: 600;
+    user-select: none;
+  }
+  details.json-box[open] summary { margin-bottom: 10px; }
+  details.json-box pre {
+    margin: 0;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: 0.82rem;
+    max-height: 360px;
+    overflow: auto;
+  }
+  details.json-box pre code { color: #c9d1d9; }
+  .json-key { color: #79c0ff; }
+  .json-str { color: #a5d6ff; }
+  .json-num { color: #d2a8ff; }
+  .json-bool { color: #ff7b72; }
+  .json-null { color: #8b949e; }
+  table.compare {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+    font-size: 0.92rem;
+  }
+  table.compare th, table.compare td {
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    text-align: left;
+  }
+  table.compare th { background: var(--bg-3); color: var(--accent); }
+  table.compare td.q-good { color: var(--good); font-weight: 700; }
+  table.compare td.q-bad  { color: var(--bad);  font-weight: 700; }
+  table.compare td.q-warn { color: var(--warn); font-weight: 700; }
+  .quiz-q { margin-bottom: 18px; }
+  .quiz-q p { font-weight: 600; margin: 0 0 8px; }
+  .quiz-q label {
+    display: block;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
+  }
+  .quiz-q label:hover { background: var(--bg-3); }
+  .quiz-q label.correct { border-color: var(--good); background: rgba(63,185,80,0.1); }
+  .quiz-q label.wrong   { border-color: var(--bad);  background: rgba(248,81,73,0.1); }
+  .reasons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-top: 14px;
+  }
+  .reason {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--good);
+    padding: 14px;
+    border-radius: 8px;
+  }
+  .reason h4 { margin: 0 0 6px; color: var(--good); font-size: 1rem; }
+  .reason p { margin: 0; font-size: 0.88rem; color: var(--muted); }
+  .nav-pill {
+    display: inline-block;
+    background: var(--bg-3);
+    color: var(--muted);
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    margin-bottom: 8px;
+  }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 24px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Eager vs Lazy & el problema N+1</h1>
+  <p>Guia interactiva con Quarkus + Hibernate. Click los botones para ver SQL real y query counts en vivo.</p>
+</header>
+
+<main>
+
+  <!-- 1. INTRO -->
+  <section class="info">
+    <span class="nav-pill">1 / 9</span>
+    <h2>Que es "fetch" en JPA?</h2>
+    <p>
+      Cuando declaras una relacion (<code>@OneToMany</code>, <code>@ManyToOne</code>, <code>@ManyToMany</code>),
+      JPA tiene que decidir <strong>cuando</strong> traer los datos relacionados desde la base de datos:
+    </p>
+    <ul>
+      <li><strong>EAGER</strong>: trae la relacion en la misma query que la entidad principal. Siempre.</li>
+      <li><strong>LAZY</strong>: solo trae la relacion cuando la accedes en codigo. Bajo demanda.</li>
+    </ul>
+    <p>
+      Defaults de JPA: <code>@ManyToOne</code> y <code>@OneToOne</code> son <strong>EAGER</strong>,
+      <code>@OneToMany</code> y <code>@ManyToMany</code> son <strong>LAZY</strong>.
+    </p>
+    <p style="color:var(--warn);">
+      En este proyecto <strong>todo</strong> esta declarado LAZY a proposito.
+      Asi controlamos exactamente cuando y como se traen las relaciones.
+    </p>
+  </section>
+
+  <!-- 2. LAZY OK -->
+  <section class="good">
+    <span class="nav-pill">2 / 9</span>
+    <h2>LAZY puro: solo lo que pediste</h2>
+    <p>
+      Si solo necesitas el titulo y la descripcion del Todo, LAZY no toca las relaciones.
+      <strong>1 sola query</strong>.
+    </p>
+    <pre><code>SELECT t FROM TodoEntity t
+// (no tocamos t.getOwner(), ni t.getComments(), ni t.getCategories())</code></pre>
+    <button class="btn" onclick="runDemo('lazy-ok', 'lazy-ok-result', 1)">Ejecutar lazy-ok</button>
+    <div id="lazy-ok-result" class="result"></div>
+  </section>
+
+  <!-- 3. EAGER SIMULATION -->
+  <section class="warn">
+    <span class="nav-pill">3 / 9</span>
+    <h2>Si todo fuera EAGER...</h2>
+    <p>
+      Imagina que cambias todas las relaciones a <code>FetchType.EAGER</code>.
+      Hibernate disparara una query extra por cada relacion, por cada todo, aunque no las uses.
+    </p>
+    <pre><code>// Esto carga todos + por cada todo: SELECT owner, SELECT categories, SELECT comments
+List&lt;TodoEntity&gt; todos = em.createQuery("SELECT t FROM TodoEntity t").getResultList();
+for (TodoEntity t : todos) {
+    t.getOwner().getEmail();
+    t.getCategories().size();
+    t.getComments().size();
+}</code></pre>
+    <button class="btn warn" onclick="runDemo('eager-simulation', 'eager-result', 0)">Simular EAGER</button>
+    <div id="eager-result" class="result"></div>
+  </section>
+
+  <!-- 4. N+1 -->
+  <section class="bad">
+    <span class="nav-pill">4 / 9</span>
+    <h2>El problema N+1</h2>
+    <p>
+      Es la trampa clasica: 1 query trae la lista de padres, despues 1 query mas <strong>por cada hijo</strong>.
+      Con 8 todos y un loop accediendo a comments, terminas con 9 queries.
+    </p>
+    <pre><code>List&lt;TodoEntity&gt; todos = em.createQuery("SELECT t FROM TodoEntity t").getResultList(); // 1
+for (TodoEntity t : todos) {
+    t.getComments().size(); //  + 1 query por todo  =  N
+}
+// Total = 1 + N</code></pre>
+    <button class="btn bad" onclick="runDemo('n-plus-1', 'nplus1-result', 0)">Reproducir N+1</button>
+    <div id="nplus1-result" class="result"></div>
+  </section>
+
+  <!-- 5. JOIN FETCH -->
+  <section class="good">
+    <span class="nav-pill">5 / 9</span>
+    <h2>Solucion 1: JOIN FETCH</h2>
+    <p>
+      JPQL te deja decirle a Hibernate "trae el padre y las relaciones en una sola query con JOINs".
+    </p>
+    <pre><code>SELECT DISTINCT t FROM TodoEntity t
+LEFT JOIN FETCH t.owner
+LEFT JOIN FETCH t.categories</code></pre>
+    <button class="btn" onclick="runDemo('join-fetch', 'jf-result', 1)">Ejecutar JOIN FETCH</button>
+    <div id="jf-result" class="result"></div>
+  </section>
+
+  <!-- 6. ENTITY GRAPH -->
+  <section class="purple">
+    <span class="nav-pill">6 / 9</span>
+    <h2>Solucion 2: @NamedEntityGraph</h2>
+    <p>
+      Declaras el grafo una vez, lo aplicas como hint en cualquier query. Reusable y declarativo.
+    </p>
+    <pre><code>@NamedEntityGraph(name = "Todo.notSoFull", attributeNodes = {
+    @NamedAttributeNode("owner"),
+    @NamedAttributeNode("categories")
+})
+// y en el query:
+em.createQuery(...).setHint("jakarta.persistence.loadgraph", em.getEntityGraph("Todo.notSoFull"));</code></pre>
+    <button class="btn purple" onclick="runDemo('entity-graph', 'eg-result', 1)">Ejecutar Entity Graph</button>
+    <div id="eg-result" class="result"></div>
+  </section>
+
+  <!-- 7. PROJECTION -->
+  <section class="info">
+    <span class="nav-pill">7 / 9</span>
+    <h2>Solucion 3: Proyeccion DTO</h2>
+    <p>
+      Si solo necesitas algunos campos, no traigas la entidad. Proyecta directo a un DTO. Es lo mas barato.
+    </p>
+    <pre><code>SELECT new org.acme.domain.models.demo.TodoView(t.id, t.title, o.email)
+FROM TodoEntity t JOIN t.owner o</code></pre>
+    <button class="btn info" onclick="runDemo('projection', 'proj-result', 1)">Ejecutar Proyeccion</button>
+    <div id="proj-result" class="result"></div>
+  </section>
+
+  <!-- 8. LAZY INIT EXCEPTION -->
+  <section class="bad">
+    <span class="nav-pill">8 / 9</span>
+    <h2>LazyInitializationException</h2>
+    <p>
+      El precio de LAZY: si intentas tocar una relacion despues de cerrar la sesion (transaccion),
+      Hibernate explota. Comun cuando devuelves entidades a la capa REST sin haberlas hidratado.
+    </p>
+    <pre><code>// Dentro de la transaccion: cargo todos
+// Cierro la sesion (em.clear)
+// Despues, fuera, intento: t.getComments().size();   // BOOM</code></pre>
+    <button class="btn bad" onclick="runDemo('lazy-init-exception', 'lie-result', 0)">Provocar la excepcion</button>
+    <div id="lie-result" class="result"></div>
+  </section>
+
+  <!-- 9. WHY LAZY BY DEFAULT -->
+  <section class="good">
+    <span class="nav-pill">9 / 9</span>
+    <h2>Por que usar LAZY por default y controlar con queries?</h2>
+    <p>
+      LAZY como default + queries explicitas para los casos que necesitan el grafo. Razones:
+    </p>
+    <div class="reasons">
+      <div class="reason">
+        <h4>1. No traes lo que no usas</h4>
+        <p>Si una pantalla solo muestra titulos, no pagas el costo de cargar comments y categories.</p>
+      </div>
+      <div class="reason">
+        <h4>2. Cada use case tunea su query</h4>
+        <p>Un endpoint usa JOIN FETCH, otro entity graph, otro DTO. Decision local, no global.</p>
+      </div>
+      <div class="reason">
+        <h4>3. Mejor para el cache</h4>
+        <p>Entidades mas pequenas en memoria = mas hits del L1/L2 cache, menos presion de heap.</p>
+      </div>
+      <div class="reason">
+        <h4>4. EAGER esconde N+1</h4>
+        <p>Con EAGER global, cada find dispara cascadas invisibles. Con LAZY, el N+1 grita en el log.</p>
+      </div>
+    </div>
+    <p style="margin-top:16px;color:var(--warn);">
+      Regla: <strong>LAZY como default, y sales a buscar el grafo explicitamente</strong> con JOIN FETCH,
+      entity graph o proyeccion cuando el use case lo necesita.
+    </p>
+  </section>
+
+  <!-- COMPARISON -->
+  <section class="info">
+    <h2>Comparacion lado a lado</h2>
+    <p>Corre las 7 estrategias de un solo click y compara queries / tiempo / filas.</p>
+    <button class="btn info big" onclick="runAll()">Ejecutar todas las estrategias</button>
+    <div id="all-result" class="result"></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="purple">
+    <h2>Quiz rapido</h2>
+
+    <div class="quiz-q" data-correct="b">
+      <p>1. Que default usa JPA para <code>@OneToMany</code>?</p>
+      <label data-opt="a"><input type="radio" name="q1" /> EAGER</label>
+      <label data-opt="b"><input type="radio" name="q1" /> LAZY</label>
+      <label data-opt="c"><input type="radio" name="q1" /> Depende del proveedor</label>
+    </div>
+
+    <div class="quiz-q" data-correct="c">
+      <p>2. Cual es la mejor solucion al N+1 cuando solo necesitas dos campos del padre y el email del owner?</p>
+      <label data-opt="a"><input type="radio" name="q2" /> Cambiar la relacion a EAGER</label>
+      <label data-opt="b"><input type="radio" name="q2" /> JOIN FETCH del grafo completo</label>
+      <label data-opt="c"><input type="radio" name="q2" /> Proyeccion DTO con solo los campos necesarios</label>
+    </div>
+
+    <div class="quiz-q" data-correct="a">
+      <p>3. Por que LazyInitializationException ocurre fuera de la sesion?</p>
+      <label data-opt="a"><input type="radio" name="q3" /> Porque la entidad esta detached y el proxy ya no tiene EntityManager para cargar la relacion</label>
+      <label data-opt="b"><input type="radio" name="q3" /> Porque la base de datos cerro la conexion</label>
+      <label data-opt="c"><input type="radio" name="q3" /> Porque el JSON no soporta proxies</label>
+    </div>
+
+    <button class="btn purple" onclick="checkQuiz()">Revisar respuestas</button>
+    <p id="quiz-score" style="margin-top:12px;font-weight:700;"></p>
+  </section>
+
+</main>
+
+<footer>
+  Hecho para TC3004B - sesion sobre fetch strategies en JPA / Hibernate.<br />
+  Endpoints: <code>/todo/demo/lazy-ok</code>, <code>/todo/demo/n-plus-1</code>, <code>/todo/demo/join-fetch</code>, etc.
+</footer>
+
+<script>
+  async function runDemo(endpoint, targetId, expectedQueries) {
+    const target = document.getElementById(targetId);
+    target.classList.add('show');
+    target.innerHTML = '<p style="color:var(--muted)">Ejecutando...</p>';
+    try {
+      const res = await fetch('/todo/demo/' + endpoint);
+      const data = await res.json();
+      target.innerHTML = renderResult(data, expectedQueries);
+    } catch (e) {
+      target.innerHTML = '<div class="err">Error de fetch: ' + e.message + '</div>';
+    }
+  }
+
+  function renderResult(data, expectedQueries) {
+    let qClass = 'q';
+    if (expectedQueries === 1 && data.queryCount === 1) qClass += ' good';
+    else if (expectedQueries === 1 && data.queryCount > 2) qClass += ' bad';
+    else if (data.queryCount >= 5) qClass += ' bad';
+    else if (data.queryCount === 1) qClass += ' good';
+
+    let html = '';
+    html += '<div class="metric-row">';
+    html += '  <div class="metric ' + qClass + '"><div class="label">Queries</div><div class="value">' + data.queryCount + '</div></div>';
+    html += '  <div class="metric t"><div class="label">Tiempo (ms)</div><div class="value">' + data.millis + '</div></div>';
+    html += '  <div class="metric r"><div class="label">Filas</div><div class="value">' + data.rows + '</div></div>';
+    html += '</div>';
+    html += '<div class="explain"><strong>' + escape(data.strategy) + ':</strong> ' + escape(data.explanation) + '</div>';
+    if (data.error) {
+      html += '<div class="err">' + escape(data.error) + '</div>';
+    }
+    if (data.sample && data.sample.length) {
+      html += '<ul class="sample">';
+      for (const s of data.sample) html += '<li>' + escape(s) + '</li>';
+      html += '</ul>';
+    }
+    html += renderJsonBox(data);
+    return html;
+  }
+
+  function renderJsonBox(data) {
+    return '<details class="json-box" open>' +
+           '<summary>Respuesta JSON</summary>' +
+           '<pre><code>' + highlightJson(data) + '</code></pre>' +
+           '</details>';
+  }
+
+  function highlightJson(obj) {
+    const json = JSON.stringify(obj, null, 2);
+    return escape(json)
+      .replace(/&quot;([^&]+?)&quot;(\s*:)/g, '<span class="json-key">&quot;$1&quot;</span>$2')
+      .replace(/:\s*&quot;([^&]*?)&quot;/g, ': <span class="json-str">&quot;$1&quot;</span>')
+      .replace(/:\s*(-?\d+(?:\.\d+)?)/g, ': <span class="json-num">$1</span>')
+      .replace(/:\s*(true|false)/g, ': <span class="json-bool">$1</span>')
+      .replace(/:\s*null/g, ': <span class="json-null">null</span>');
+  }
+
+  async function runAll() {
+    const target = document.getElementById('all-result');
+    target.classList.add('show');
+    target.innerHTML = '<p style="color:var(--muted)">Ejecutando 7 estrategias...</p>';
+    try {
+      const res = await fetch('/todo/demo/all');
+      const data = await res.json();
+      let html = '<table class="compare"><thead><tr><th>Estrategia</th><th>Queries</th><th>ms</th><th>Filas</th></tr></thead><tbody>';
+      for (const r of data) {
+        const cls = r.queryCount === 1 ? 'q-good' : (r.queryCount >= 5 ? 'q-bad' : 'q-warn');
+        html += '<tr>';
+        html += '<td>' + escape(r.strategy) + '</td>';
+        html += '<td class="' + cls + '">' + r.queryCount + '</td>';
+        html += '<td>' + r.millis + '</td>';
+        html += '<td>' + r.rows + '</td>';
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      html += renderJsonBox(data);
+      target.innerHTML = html;
+    } catch (e) {
+      target.innerHTML = '<div class="err">Error de fetch: ' + e.message + '</div>';
+    }
+  }
+
+  function checkQuiz() {
+    const qs = document.querySelectorAll('.quiz-q');
+    let score = 0;
+    qs.forEach(q => {
+      const correct = q.dataset.correct;
+      const labels = q.querySelectorAll('label');
+      labels.forEach(l => {
+        l.classList.remove('correct', 'wrong');
+        const radio = l.querySelector('input');
+        if (radio.checked) {
+          if (l.dataset.opt === correct) {
+            l.classList.add('correct');
+            score++;
+          } else {
+            l.classList.add('wrong');
+          }
+        }
+        if (l.dataset.opt === correct) l.classList.add('correct');
+      });
+    });
+    document.getElementById('quiz-score').textContent = 'Score: ' + score + ' / ' + qs.length;
+  }
+
+  function escape(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+</script>
+
+</body>
+</html>

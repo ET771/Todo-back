@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Walkthrough: Testing en Quarkus con H2</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --bg-2: #1e293b;
+    --bg-3: #334155;
+    --fg: #e2e8f0;
+    --fg-dim: #94a3b8;
+    --accent: #38bdf8;
+    --accent-2: #a78bfa;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --border: #334155;
+    --code-bg: #0b1220;
+    --add: rgba(74, 222, 128, 0.12);
+    --add-border: #4ade80;
+    --del: rgba(248, 113, 113, 0.12);
+    --del-border: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    line-height: 1.6;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  aside {
+    background: var(--bg-2);
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  aside h2 {
+    color: var(--accent);
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0 0 16px 8px;
+  }
+  .step-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .step-list li {
+    margin-bottom: 4px;
+  }
+  .step-list button {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--fg-dim);
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .step-list button:hover {
+    background: var(--bg-3);
+    color: var(--fg);
+  }
+  .step-list button.active {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(167, 139, 250, 0.15));
+    color: var(--fg);
+    border-color: var(--accent);
+  }
+  .step-list .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--bg-3);
+    color: var(--fg);
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .step-list .active .num {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .step-list .done .num {
+    background: var(--green);
+    color: var(--bg);
+  }
+  main {
+    padding: 40px 56px;
+    max-width: 1000px;
+  }
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+    margin-bottom: 32px;
+  }
+  .header h1 {
+    margin: 0 0 8px 0;
+    font-size: 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header p {
+    margin: 0;
+    color: var(--fg-dim);
+    font-size: 15px;
+  }
+  .step {
+    display: none;
+    animation: fadeIn 0.3s ease;
+  }
+  .step.active { display: block; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .step h2 {
+    color: var(--accent);
+    font-size: 22px;
+    margin-top: 0;
+  }
+  .step h3 {
+    color: var(--accent-2);
+    font-size: 16px;
+    margin-top: 28px;
+    margin-bottom: 8px;
+  }
+  .step p {
+    color: var(--fg);
+    font-size: 15px;
+  }
+  .step ul, .step ol {
+    color: var(--fg);
+  }
+  .step li { margin-bottom: 6px; }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 6px;
+  }
+  .badge-new { background: var(--green); color: var(--bg); }
+  .badge-edit { background: var(--yellow); color: var(--bg); }
+  .badge-del { background: var(--red); color: var(--bg); }
+  .badge-info { background: var(--accent); color: var(--bg); }
+
+  .file-path {
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    background: var(--bg-3);
+    color: var(--accent);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    display: inline-block;
+    margin-bottom: 6px;
+  }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.55;
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  code { font-family: "SF Mono", Menlo, Monaco, Consolas, monospace; }
+  pre code { color: #cbd5e1; }
+  .kw { color: #c084fc; }
+  .str { color: #86efac; }
+  .num-lit { color: #fbbf24; }
+  .com { color: #64748b; font-style: italic; }
+  .type { color: #38bdf8; }
+  .ann { color: #fb7185; }
+  .fn { color: #fde047; }
+
+  .diff-line { display: block; padding: 0 8px; margin: 0 -16px; }
+  .diff-add { background: var(--add); border-left: 3px solid var(--add-border); }
+  .diff-del { background: var(--del); border-left: 3px solid var(--del-border); }
+
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: rgba(56, 189, 248, 0.08);
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+  }
+  .callout.warn {
+    border-left-color: var(--yellow);
+    background: rgba(251, 191, 36, 0.08);
+  }
+  .callout.success {
+    border-left-color: var(--green);
+    background: rgba(74, 222, 128, 0.08);
+  }
+  .callout strong { color: var(--accent); }
+  .callout.warn strong { color: var(--yellow); }
+  .callout.success strong { color: var(--green); }
+
+  .nav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+  .nav button {
+    background: var(--bg-2);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .nav button:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+  .nav button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .progress {
+    height: 4px;
+    background: var(--bg-2);
+    border-radius: 2px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition: width 0.3s ease;
+  }
+  .quiz {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0;
+  }
+  .quiz strong { color: var(--accent-2); }
+  .quiz-options { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .quiz-options button {
+    background: var(--bg-3);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    font-size: 14px;
+  }
+  .quiz-options button:hover { border-color: var(--accent); }
+  .quiz-options button.correct { background: rgba(74, 222, 128, 0.2); border-color: var(--green); }
+  .quiz-options button.wrong { background: rgba(248, 113, 113, 0.2); border-color: var(--red); }
+  .quiz-feedback { margin-top: 12px; font-size: 14px; min-height: 20px; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .stat {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    padding: 16px;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .stat .n {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+  }
+  .stat .l {
+    font-size: 12px;
+    color: var(--fg-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  details {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 12px 0;
+  }
+  summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 600;
+    user-select: none;
+  }
+  details[open] summary { margin-bottom: 12px; }
+
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: relative; height: auto; }
+    main { padding: 24px 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <h2>Pasos</h2>
+    <ul class="step-list" id="stepList"></ul>
+  </aside>
+
+  <main>
+    <div class="header">
+      <h1>Testing en Quarkus con H2</h1>
+      <p>Walkthrough interactivo: cómo agregamos pruebas unitarias e integración a un proyecto Quarkus que usa MySQL en producción y H2 in-memory en tests.</p>
+    </div>
+
+    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+    <div id="content"></div>
+
+    <div class="nav">
+      <button id="prevBtn">← Anterior</button>
+      <button id="nextBtn">Siguiente →</button>
+    </div>
+  </main>
+</div>
+
+<script>
+const steps = [
+  {
+    title: "Visión general",
+    content: `
+      <h2>¿Qué vamos a hacer?</h2>
+      <p>El proyecto es una API en <strong>Quarkus</strong> con arquitectura en capas (Clean Architecture):</p>
+      <ul>
+        <li><code>domain</code> — modelos e interfaces de repositorios</li>
+        <li><code>application/usecase</code> — casos de uso (lógica de negocio)</li>
+        <li><code>infrastructure/repository</code> — implementaciones Panache (JPA)</li>
+        <li><code>interfaces/rest</code> — endpoints JAX-RS</li>
+      </ul>
+      <p>Vamos a agregar dos tipos de pruebas:</p>
+
+      <div class="stats">
+        <div class="stat"><span class="n">4</span><span class="l">Pruebas unitarias</span></div>
+        <div class="stat"><span class="n">6</span><span class="l">Pruebas integración</span></div>
+        <div class="stat"><span class="n">10</span><span class="l">Tests totales</span></div>
+        <div class="stat"><span class="n">H2</span><span class="l">DB en memoria</span></div>
+      </div>
+
+      <h3>Diferencia clave</h3>
+      <p><span class="badge badge-info">Unitaria</span> Aísla un componente con <strong>Mockito</strong>: rápido, sin Quarkus, sin BD.</p>
+      <p><span class="badge badge-info">Integración</span> Levanta Quarkus completo con <code>@QuarkusTest</code>, BD H2 real, y verifica que el flujo HTTP → caso de uso → repositorio → BD funcione end-to-end.</p>
+
+      <div class="callout">
+        <strong>Reto principal:</strong> el proyecto usa Firebase para autenticación. Como Firebase no se puede arrancar en tests, vamos a aislar sus llamadas para poder mockearlas.
+      </div>
+    `
+  },
+
+  {
+    title: "Dependencias (pom.xml)",
+    content: `
+      <h2>1. Agregar dependencias de testing</h2>
+      <p>Necesitamos tres dependencias nuevas en <code>pom.xml</code>, todas con <code>scope=test</code>:</p>
+      <div class="file-path">pom.xml</div>
+      <pre><code><span class="diff-line diff-add"><span class="ann">&lt;dependency&gt;</span></span>
+<span class="diff-line diff-add">    <span class="ann">&lt;groupId&gt;</span>io.quarkus<span class="ann">&lt;/groupId&gt;</span></span>
+<span class="diff-line diff-add">    <span class="ann">&lt;artifactId&gt;</span>quarkus-jdbc-h2<span class="ann">&lt;/artifactId&gt;</span></span>
+<span class="diff-line diff-add">    <span class="ann">&lt;scope&gt;</span>test<span class="ann">&lt;/scope&gt;</span></span>
+<span class="diff-line diff-add"><span class="ann">&lt;/dependency&gt;</span></span>
+<span class="diff-line diff-add"><span class="ann">&lt;dependency&gt;</span></span>
+<span class="diff-line diff-add">    <span class="ann">&lt;groupId&gt;</span>io.quarkus<span class="ann">&lt;/groupId&gt;</span></span>
+<span class="diff-line diff-add">    <span class="ann">&lt;artifactId&gt;</span>quarkus-junit5-mockito<span class="ann">&lt;/artifactId&gt;</span></span>
+<span class="diff-line diff-add">    <span class="ann">&lt;scope&gt;</span>test<span class="ann">&lt;/scope&gt;</span></span>
+<span class="diff-line diff-add"><span class="ann">&lt;/dependency&gt;</span></span>
+<span class="diff-line diff-add"><span class="ann">&lt;dependency&gt;</span></span>
+<span class="diff-line diff-add">    <span class="ann">&lt;groupId&gt;</span>org.mockito<span class="ann">&lt;/groupId&gt;</span></span>
+<span class="diff-line diff-add">    <span class="ann">&lt;artifactId&gt;</span>mockito-inline<span class="ann">&lt;/artifactId&gt;</span></span>
+<span class="diff-line diff-add">    <span class="ann">&lt;version&gt;</span>5.2.0<span class="ann">&lt;/version&gt;</span></span>
+<span class="diff-line diff-add">    <span class="ann">&lt;scope&gt;</span>test<span class="ann">&lt;/scope&gt;</span></span>
+<span class="diff-line diff-add"><span class="ann">&lt;/dependency&gt;</span></span></code></pre>
+
+      <h3>¿Para qué sirve cada una?</h3>
+      <ul>
+        <li><strong>quarkus-jdbc-h2</strong>: driver JDBC de la BD H2 in-memory.</li>
+        <li><strong>quarkus-junit5-mockito</strong>: integración Quarkus + Mockito (provee <code>@InjectMock</code>).</li>
+        <li><strong>mockito-inline</strong>: motor de Mockito que permite mockear métodos estáticos y clases finales.</li>
+      </ul>
+
+      <div class="quiz" data-correct="1">
+        <strong>¿Por qué <code>scope=test</code>?</strong>
+        <div class="quiz-options">
+          <button>Para que la app no inicie con H2 por accidente</button>
+          <button>Para que las dependencias solo se incluyan al compilar y ejecutar tests, no en el JAR de producción</button>
+          <button>Es opcional, da lo mismo</button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    `
+  },
+
+  {
+    title: "Configurar H2 (application.properties)",
+    content: `
+      <h2>2. Perfil de test con H2 in-memory</h2>
+      <p>Quarkus permite configuración por <strong>perfil</strong> usando el prefijo <code>%nombre.</code>. El perfil <code>test</code> se activa automáticamente cuando corres <code>mvn test</code>.</p>
+
+      <div class="file-path">src/main/resources/application.properties</div>
+      <pre><code><span class="com"># Producción: MySQL</span>
+quarkus.datasource.db-kind = mysql
+quarkus.datasource.username = root
+quarkus.datasource.password = andrestorres
+quarkus.datasource.jdbc.url = jdbc:mysql://localhost:3306/todogrupo2
+quarkus.hibernate-orm.schema-management.strategy = update
+firebase.credentials=src/main/resources/todogrupo2-...firebase-adminsdk....json
+
+<span class="diff-line diff-add"><span class="com"># Test profile: H2 in-memory database</span></span>
+<span class="diff-line diff-add"><span class="ann">%test.</span>quarkus.datasource.db-kind=h2</span>
+<span class="diff-line diff-add"><span class="ann">%test.</span>quarkus.datasource.username=sa</span>
+<span class="diff-line diff-add"><span class="ann">%test.</span>quarkus.datasource.password=</span>
+<span class="diff-line diff-add"><span class="ann">%test.</span>quarkus.datasource.jdbc.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE</span>
+<span class="diff-line diff-add"><span class="ann">%test.</span>quarkus.datasource.jdbc.driver=org.h2.Driver</span>
+<span class="diff-line diff-add"><span class="ann">%test.</span>quarkus.hibernate-orm.schema-management.strategy=drop-and-create</span>
+<span class="diff-line diff-add"><span class="ann">%test.</span>firebase.credentials=src/test/resources/firebase-fake.json</span></code></pre>
+
+      <h3>Detalles importantes de la URL de H2</h3>
+      <ul>
+        <li><code>jdbc:h2:mem:testdb</code> — base de datos en memoria llamada <code>testdb</code></li>
+        <li><code>DB_CLOSE_DELAY=-1</code> — la BD vive mientras la JVM esté arriba</li>
+        <li><code>MODE=MySQL</code> — H2 emula sintaxis MySQL para que las queries del proyecto funcionen igual</li>
+        <li><code>DATABASE_TO_LOWER=TRUE</code> — nombres de tablas en minúsculas como en MySQL</li>
+      </ul>
+
+      <div class="callout">
+        <strong>drop-and-create</strong> en tests significa que cada arranque de Quarkus borra y recrea las tablas, garantizando una BD limpia.
+      </div>
+    `
+  },
+
+  {
+    title: "Unit test: CreateTodoUseCase",
+    content: `
+      <h2>3. Prueba unitaria del caso de uso CreateTodo</h2>
+      <p>Una prueba unitaria <strong>NO</strong> usa Quarkus ni BD. Se enfoca solo en la lógica del caso de uso, mockeando sus dependencias (repositorio + contexto de auth).</p>
+
+      <div class="file-path">src/test/java/org/acme/application/usecase/CreateTodoUseCaseTest.java</div>
+      <pre><code><span class="ann">@BeforeEach</span>
+<span class="kw">void</span> <span class="fn">setUp</span>() {
+    todoRepository = <span class="fn">mock</span>(TodoRepository.<span class="kw">class</span>);
+    authContext = <span class="fn">mock</span>(AuthContext.<span class="kw">class</span>);
+
+    User authenticatedUser = <span class="kw">new</span> <span class="type">User</span>(
+        UUID.<span class="fn">randomUUID</span>(), <span class="str">"test@test.com"</span>, <span class="str">"Test User"</span>,
+        <span class="str">"USER"</span>, <span class="kw">true</span>, <span class="str">"firebase-uid"</span>);
+    <span class="fn">when</span>(authContext.<span class="fn">getUser</span>()).<span class="fn">thenReturn</span>(authenticatedUser);
+    <span class="fn">when</span>(todoRepository.<span class="fn">save</span>(<span class="fn">any</span>(Todo.<span class="kw">class</span>)))
+        .<span class="fn">thenAnswer</span>(inv -&gt; inv.<span class="fn">getArgument</span>(<span class="num-lit">0</span>));
+
+    useCase = <span class="kw">new</span> <span class="type">CreateTodoUseCase</span>(todoRepository, authContext);
+}
+
+<span class="ann">@Test</span>
+<span class="kw">void</span> <span class="fn">executeShouldPersistTodoWithGeneratedIdAndCreatedAt</span>() {
+    CreateTodoDto dto = <span class="kw">new</span> <span class="type">CreateTodoDto</span>(<span class="str">"Buy milk"</span>, <span class="str">"2 liters"</span>);
+
+    Todo result = useCase.<span class="fn">execute</span>(dto);
+
+    <span class="fn">assertNotNull</span>(result.<span class="fn">getId</span>());        <span class="com">// id generado</span>
+    <span class="fn">assertNotNull</span>(result.<span class="fn">getCreatedAt</span>()); <span class="com">// timestamp generado</span>
+    <span class="fn">assertEquals</span>(<span class="str">"Buy milk"</span>, result.<span class="fn">getTitle</span>());
+
+    ArgumentCaptor&lt;Todo&gt; captor = ArgumentCaptor.<span class="fn">forClass</span>(Todo.<span class="kw">class</span>);
+    <span class="fn">verify</span>(todoRepository).<span class="fn">save</span>(captor.<span class="fn">capture</span>());
+    <span class="com">// validar lo que se mandó al repo</span>
+}</code></pre>
+
+      <h3>Conceptos clave de Mockito</h3>
+      <ul>
+        <li><code>mock(Clase.class)</code> — crea un objeto falso</li>
+        <li><code>when(...).thenReturn(...)</code> — define comportamiento</li>
+        <li><code>verify(...)</code> — comprueba que el método se llamó</li>
+        <li><code>ArgumentCaptor</code> — captura el argumento real con el que se llamó al mock</li>
+      </ul>
+    `
+  },
+
+  {
+    title: "Refactor: FirebaseUserCreator",
+    content: `
+      <h2>4. El problema de Firebase y cómo aislarlo</h2>
+      <p>El caso de uso <code>RegisterUserUseCase</code> llama a <code>FirebaseAuth.getInstance().createUser(...)</code> directamente. Esto es un <strong>método estático</strong> que requiere que Firebase esté inicializado, cosa que no podemos hacer en tests.</p>
+
+      <div class="callout warn">
+        <strong>Regla de oro:</strong> los métodos estáticos son enemigos del testing. La solución estándar es <em>envolverlos</em> en una clase inyectable.
+      </div>
+
+      <h3>Antes (imposible de testear sin Firebase real)</h3>
+      <pre><code><span class="kw">public</span> User <span class="fn">execute</span>(RegisterUserDto dto) <span class="kw">throws</span> FirebaseAuthException {
+    <span class="com">// ...</span>
+    UserRecord.CreateRequest request = <span class="kw">new</span> UserRecord.CreateRequest();
+    request.<span class="fn">setEmail</span>(user.<span class="fn">getEmail</span>());
+    request.<span class="fn">setPassword</span>(dto.<span class="fn">getPassword</span>());
+    <span class="diff-line diff-del">    UserRecord rec = FirebaseAuth.<span class="fn">getInstance</span>().<span class="fn">createUser</span>(request); <span class="com">// estático ❌</span></span>
+    user.<span class="fn">setFirebaseUuid</span>(rec.<span class="fn">getUid</span>());
+    <span class="kw">return</span> userRepository.<span class="fn">create</span>(user);
+}</code></pre>
+
+      <h3>Nueva clase: FirebaseUserCreator</h3>
+      <p>Creamos un bean CDI delgado que envuelve la llamada estática:</p>
+      <div class="file-path">src/main/java/org/acme/infrastructure/firebase/FirebaseUserCreator.java</div>
+      <pre><code><span class="ann">@ApplicationScoped</span>
+<span class="kw">public class</span> <span class="type">FirebaseUserCreator</span> {
+
+    <span class="kw">public</span> UserRecord <span class="fn">create</span>(String email, String password)
+            <span class="kw">throws</span> FirebaseAuthException {
+        UserRecord.CreateRequest request = <span class="kw">new</span> UserRecord.CreateRequest();
+        request.<span class="fn">setEmail</span>(email);
+        request.<span class="fn">setPassword</span>(password);
+        request.<span class="fn">setDisabled</span>(<span class="kw">false</span>);
+        request.<span class="fn">setEmailVerified</span>(<span class="kw">true</span>);
+        <span class="kw">return</span> FirebaseAuth.<span class="fn">getInstance</span>().<span class="fn">createUser</span>(request);
+    }
+}</code></pre>
+
+      <h3>RegisterUserUseCase ahora lo recibe por inyección</h3>
+      <pre><code><span class="ann">@Inject</span>
+<span class="kw">public</span> <span class="fn">RegisterUserUseCase</span>(UserRepository userRepository,
+                            <span class="diff-line diff-add">                            FirebaseUserCreator firebaseUserCreator</span>) {
+    <span class="kw">this</span>.userRepository = userRepository;
+    <span class="diff-line diff-add">    <span class="kw">this</span>.firebaseUserCreator = firebaseUserCreator;</span>
+}
+
+<span class="kw">public</span> User <span class="fn">execute</span>(RegisterUserDto dto) <span class="kw">throws</span> FirebaseAuthException {
+    <span class="com">// ...</span>
+    <span class="diff-line diff-add">    UserRecord rec = firebaseUserCreator.<span class="fn">create</span>(user.<span class="fn">getEmail</span>(), dto.<span class="fn">getPassword</span>()); <span class="com">// ✅</span></span>
+    user.<span class="fn">setFirebaseUuid</span>(rec.<span class="fn">getUid</span>());
+    <span class="kw">return</span> userRepository.<span class="fn">create</span>(user);
+}</code></pre>
+
+      <p>Ahora <code>FirebaseUserCreator</code> es un bean CDI normal que podemos reemplazar con un mock en tests. ¡Sin tocar el comportamiento de producción!</p>
+    `
+  },
+
+  {
+    title: "Unit test: RegisterUserUseCase",
+    content: `
+      <h2>5. Prueba unitaria del caso de uso RegisterUser</h2>
+      <p>Gracias al refactor, el test es muy limpio: solo mockeamos <code>FirebaseUserCreator</code> y <code>UserRepository</code>.</p>
+
+      <div class="file-path">src/test/java/org/acme/application/usecase/RegisterUserUseCaseTest.java</div>
+      <pre><code><span class="ann">@BeforeEach</span>
+<span class="kw">void</span> <span class="fn">setUp</span>() {
+    userRepository = <span class="fn">mock</span>(UserRepository.<span class="kw">class</span>);
+    firebaseUserCreator = <span class="fn">mock</span>(FirebaseUserCreator.<span class="kw">class</span>);
+    <span class="fn">when</span>(userRepository.<span class="fn">create</span>(<span class="fn">any</span>(User.<span class="kw">class</span>)))
+        .<span class="fn">thenAnswer</span>(inv -&gt; inv.<span class="fn">getArgument</span>(<span class="num-lit">0</span>));
+    useCase = <span class="kw">new</span> <span class="type">RegisterUserUseCase</span>(userRepository, firebaseUserCreator);
+}
+
+<span class="ann">@Test</span>
+<span class="kw">void</span> <span class="fn">executeShouldCreateFirebaseUserAndPersistInRepository</span>()
+        <span class="kw">throws</span> FirebaseAuthException {
+    RegisterUserDto dto = <span class="kw">new</span> <span class="type">RegisterUserDto</span>();
+    dto.<span class="fn">setEmail</span>(<span class="str">"alice@test.com"</span>);
+    dto.<span class="fn">setFullName</span>(<span class="str">"Alice Smith"</span>);
+    dto.<span class="fn">setPassword</span>(<span class="str">"supersecret"</span>);
+
+    <span class="com">// stub: cuando se cree usuario en Firebase, devolver un UID falso</span>
+    UserRecord firebaseRecord = <span class="fn">mock</span>(UserRecord.<span class="kw">class</span>);
+    <span class="fn">when</span>(firebaseRecord.<span class="fn">getUid</span>()).<span class="fn">thenReturn</span>(<span class="str">"firebase-uid-123"</span>);
+    <span class="fn">when</span>(firebaseUserCreator.<span class="fn">create</span>(<span class="fn">eq</span>(<span class="str">"alice@test.com"</span>), <span class="fn">eq</span>(<span class="str">"supersecret"</span>)))
+        .<span class="fn">thenReturn</span>(firebaseRecord);
+
+    User result = useCase.<span class="fn">execute</span>(dto);
+
+    <span class="fn">assertEquals</span>(<span class="str">"firebase-uid-123"</span>, result.<span class="fn">getFirebaseUuid</span>());
+    <span class="fn">assertEquals</span>(<span class="str">"USER"</span>, result.<span class="fn">getRole</span>());
+    <span class="fn">verify</span>(userRepository).<span class="fn">create</span>(<span class="fn">any</span>(User.<span class="kw">class</span>));
+}
+
+<span class="ann">@Test</span>
+<span class="kw">void</span> <span class="fn">executeShouldPropagateFirebaseExceptions</span>() <span class="kw">throws</span> FirebaseAuthException {
+    <span class="fn">when</span>(firebaseUserCreator.<span class="fn">create</span>(<span class="fn">any</span>(), <span class="fn">any</span>()))
+        .<span class="fn">thenThrow</span>(<span class="fn">mock</span>(FirebaseAuthException.<span class="kw">class</span>));
+
+    <span class="fn">assertThrows</span>(FirebaseAuthException.<span class="kw">class</span>, () -&gt; useCase.<span class="fn">execute</span>(dto));
+}</code></pre>
+
+      <div class="callout success">
+        <strong>Beneficio del refactor:</strong> sin <code>FirebaseUserCreator</code> habríamos necesitado <code>Mockito.mockStatic()</code>, que es complejo y frágil. Con la inyección, el test es trivial.
+      </div>
+    `
+  },
+
+  {
+    title: "Integración: Repositorios con H2",
+    content: `
+      <h2>6. Pruebas de integración de repositorios</h2>
+      <p>Aquí ya usamos <code>@QuarkusTest</code> para arrancar Quarkus + H2. Inyectamos el repositorio real y validamos que las operaciones realmente persistan en la BD.</p>
+
+      <div class="file-path">src/test/java/org/acme/infrastructure/repository/UserRepositoryImplTest.java</div>
+      <pre><code><span class="ann">@QuarkusTest</span>
+<span class="kw">class</span> <span class="type">UserRepositoryImplTest</span> {
+
+    <span class="ann">@Inject</span>
+    UserRepositoryImpl userRepository;
+
+    <span class="ann">@Test</span>
+    <span class="kw">void</span> <span class="fn">findByFirebaseUuidShouldReturnPersistedUser</span>() {
+        String firebaseUuid = <span class="str">"firebase-find-"</span> + UUID.<span class="fn">randomUUID</span>();
+        User user = <span class="kw">new</span> <span class="type">User</span>(UUID.<span class="fn">randomUUID</span>(),
+            <span class="str">"find@test.com"</span>, <span class="str">"Find User"</span>,
+            <span class="str">"USER"</span>, <span class="kw">true</span>, firebaseUuid);
+
+        userRepository.<span class="fn">create</span>(user);   <span class="com">// ← INSERT real en H2</span>
+
+        Optional&lt;User&gt; found = userRepository.<span class="fn">findByFirebaseUuid</span>(firebaseUuid);
+
+        <span class="fn">assertTrue</span>(found.<span class="fn">isPresent</span>());
+        <span class="fn">assertEquals</span>(<span class="str">"Find User"</span>, found.<span class="fn">get</span>().<span class="fn">getFullName</span>());
+    }
+}</code></pre>
+
+      <div class="file-path">src/test/java/org/acme/infrastructure/repository/TodoRepositoryImplTest.java</div>
+      <pre><code><span class="ann">@QuarkusTest</span>
+<span class="kw">class</span> <span class="type">TodoRepositoryImplTest</span> {
+
+    <span class="ann">@Inject</span>
+    TodoRepositoryImpl todoRepository;
+
+    <span class="ann">@Test</span>
+    <span class="kw">void</span> <span class="fn">saveShouldPersistTodoIntoH2</span>() {
+        Todo todo = <span class="kw">new</span> <span class="type">Todo</span>();
+        todo.<span class="fn">setId</span>(UUID.<span class="fn">randomUUID</span>());
+        todo.<span class="fn">setTitle</span>(<span class="str">"Title H2"</span>);
+        todo.<span class="fn">setDescription</span>(<span class="str">"Description H2"</span>);
+        todo.<span class="fn">setCreatedAt</span>(LocalDateTime.<span class="fn">now</span>());
+
+        todoRepository.<span class="fn">save</span>(todo);
+
+        <span class="com">// Releer de la BD para confirmar persistencia</span>
+        TodoEntity reloaded = todoRepository.<span class="fn">findById</span>(todo.<span class="fn">getId</span>());
+        <span class="fn">assertNotNull</span>(reloaded);
+        <span class="fn">assertEquals</span>(<span class="str">"Title H2"</span>, reloaded.<span class="fn">getTitle</span>());
+    }
+}</code></pre>
+
+      <div class="quiz" data-correct="0">
+        <strong>¿Por qué releemos con <code>findById</code> después del <code>save</code>?</strong>
+        <div class="quiz-options">
+          <button>Para confirmar que el dato realmente quedó en H2 y no solo en memoria del repo</button>
+          <button>Porque save no devuelve el id</button>
+          <button>Para limpiar el cache</button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+    `
+  },
+
+  {
+    title: "Bypass del filtro de auth",
+    content: `
+      <h2>7. Reemplazar FirebaseAuthFilter en tests</h2>
+      <p>El endpoint <code>POST /todos</code> está protegido por <code>FirebaseAuthFilter</code>, que valida un token Firebase real. En tests no podemos generar tokens válidos.</p>
+
+      <p>La solución: crear un filtro de test que reemplaza al real usando <code>@io.quarkus.test.Mock</code>. Este filtro de test inyecta un usuario falso en el <code>AuthContext</code>.</p>
+
+      <div class="file-path">src/test/java/org/acme/interfaces/rest/TestFirebaseAuthFilter.java</div>
+      <pre><code><span class="ann">@Mock</span>          <span class="com">// ← reemplaza el bean original en tests</span>
+<span class="ann">@Provider</span>
+<span class="ann">@Priority</span>(Priorities.AUTHENTICATION)
+<span class="ann">@ApplicationScoped</span>
+<span class="kw">public class</span> <span class="type">TestFirebaseAuthFilter</span> <span class="kw">extends</span> <span class="type">FirebaseAuthFilter</span> {
+
+    <span class="kw">public static final</span> UUID TEST_USER_ID =
+        UUID.<span class="fn">fromString</span>(<span class="str">"00000000-0000-0000-0000-000000000001"</span>);
+    <span class="kw">public static final</span> String TEST_FIREBASE_UID = <span class="str">"test-firebase-uid"</span>;
+
+    <span class="ann">@Inject</span>
+    AuthContext authContext;
+
+    <span class="ann">@Override</span>
+    <span class="kw">public void</span> <span class="fn">filter</span>(ContainerRequestContext requestContext) {
+        User user = <span class="kw">new</span> <span class="type">User</span>(
+            TEST_USER_ID, <span class="str">"test@test.com"</span>, <span class="str">"Test User"</span>,
+            <span class="str">"USER"</span>, <span class="kw">true</span>, TEST_FIREBASE_UID);
+        authContext.<span class="fn">setUser</span>(user);  <span class="com">// usuario falso, listo para usar</span>
+    }
+}</code></pre>
+
+      <h3>¿Cómo funciona <code>@Mock</code> de Quarkus?</h3>
+      <ul>
+        <li>Está en <code>io.quarkus.test.Mock</code> (no confundir con Mockito)</li>
+        <li>Marca un bean CDI como <strong>alternativo</strong> con prioridad alta</li>
+        <li>Quarkus, al correr en perfil <code>test</code>, prefiere este bean sobre el original</li>
+        <li>El filtro real <code>FirebaseAuthFilter</code> queda completamente reemplazado</li>
+      </ul>
+
+      <div class="callout">
+        <strong>Resultado:</strong> cuando un test envía <code>POST /todos</code>, el filtro de test acepta cualquier token, fija un usuario de prueba en el contexto y deja pasar el request al endpoint real.
+      </div>
+    `
+  },
+
+  {
+    title: "Endpoint test: UserResource + H2",
+    content: `
+      <h2>8. Test del endpoint POST /users con persistencia real</h2>
+      <p>Este test es <strong>verdaderamente end-to-end</strong>: la única pieza mockeada es <code>FirebaseUserCreator</code>. Todo lo demás (use case, repositorio, BD H2) es real.</p>
+
+      <div class="file-path">src/test/java/org/acme/interfaces/rest/UserResourceTest.java</div>
+      <pre><code><span class="ann">@QuarkusTest</span>
+<span class="kw">class</span> <span class="type">UserResourceTest</span> {
+
+    <span class="ann">@InjectMock</span>
+    FirebaseUserCreator firebaseUserCreator;  <span class="com">// ← solo Firebase mockeado</span>
+
+    <span class="ann">@Inject</span>
+    UserRepositoryImpl userRepository;        <span class="com">// ← repo real para verificar</span>
+
+    <span class="ann">@Test</span>
+    <span class="kw">void</span> <span class="fn">registerUserShouldPersistUserInH2</span>() <span class="kw">throws</span> FirebaseAuthException {
+        String firebaseUid = <span class="str">"firebase-uid-"</span> + UUID.<span class="fn">randomUUID</span>();
+        String email = <span class="str">"alice-"</span> + UUID.<span class="fn">randomUUID</span>() + <span class="str">"@test.com"</span>;
+
+        <span class="com">// Stub Firebase</span>
+        UserRecord rec = Mockito.<span class="fn">mock</span>(UserRecord.<span class="kw">class</span>);
+        Mockito.<span class="fn">when</span>(rec.<span class="fn">getUid</span>()).<span class="fn">thenReturn</span>(firebaseUid);
+        Mockito.<span class="fn">when</span>(firebaseUserCreator.<span class="fn">create</span>(<span class="fn">eq</span>(email), <span class="fn">eq</span>(<span class="str">"supersecret"</span>)))
+            .<span class="fn">thenReturn</span>(rec);
+
+        String body = <span class="str">"{\\"fullName\\":\\"Alice Smith\\",\\"email\\":\\""</span>
+                    + email + <span class="str">"\\",\\"password\\":\\"supersecret\\"}"</span>;
+
+        <span class="com">// 1️⃣ Hacer el request HTTP</span>
+        <span class="fn">given</span>().<span class="fn">contentType</span>(JSON).<span class="fn">body</span>(body)
+            .<span class="fn">when</span>().<span class="fn">post</span>(<span class="str">"/users"</span>)
+            .<span class="fn">then</span>()
+                .<span class="fn">statusCode</span>(<span class="num-lit">200</span>)
+                .<span class="fn">body</span>(<span class="str">"email"</span>, <span class="fn">equalTo</span>(email))
+                .<span class="fn">body</span>(<span class="str">"firebaseUuid"</span>, <span class="fn">equalTo</span>(firebaseUid))
+                .<span class="fn">body</span>(<span class="str">"id"</span>, <span class="fn">notNullValue</span>());
+
+        <span class="com">// 2️⃣ ¡Verificar que REALMENTE quedó en H2!</span>
+        Optional&lt;User&gt; persisted = userRepository.<span class="fn">findByFirebaseUuid</span>(firebaseUid);
+        <span class="fn">assertTrue</span>(persisted.<span class="fn">isPresent</span>(), <span class="str">"User should be persisted in H2"</span>);
+        <span class="fn">assertEquals</span>(email, persisted.<span class="fn">get</span>().<span class="fn">getEmail</span>());
+        <span class="fn">assertEquals</span>(<span class="str">"USER"</span>, persisted.<span class="fn">get</span>().<span class="fn">getRole</span>());
+    }
+}</code></pre>
+
+      <h3>Flujo completo</h3>
+      <ol>
+        <li>RestAssured envía <code>POST /users</code> via HTTP</li>
+        <li><code>UserResource</code> recibe el request</li>
+        <li><code>RegisterUserUseCase</code> arma el <code>User</code> y llama a <code>FirebaseUserCreator</code> (mockeado, devuelve UID falso)</li>
+        <li><code>UserRepositoryImpl</code> hace <code>INSERT</code> real en H2</li>
+        <li>El endpoint responde con el <code>User</code> en JSON</li>
+        <li>El test consulta H2 con <code>findByFirebaseUuid</code> y verifica que el registro existe</li>
+      </ol>
+    `
+  },
+
+  {
+    title: "Endpoint test: TodoResource + H2",
+    content: `
+      <h2>9. Test del endpoint POST /todos con persistencia real</h2>
+      <p>Aquí no necesitamos mockear nada del use case: ya tenemos el filtro de test que provee el usuario falso.</p>
+
+      <div class="file-path">src/test/java/org/acme/interfaces/rest/TodoResourceTest.java</div>
+      <pre><code><span class="ann">@QuarkusTest</span>
+<span class="kw">class</span> <span class="type">TodoResourceTest</span> {
+
+    <span class="ann">@Inject</span>
+    TodoRepositoryImpl todoRepository;  <span class="com">// ← repo real</span>
+
+    <span class="ann">@Test</span>
+    <span class="kw">void</span> <span class="fn">createTodoShouldPersistInH2AndReturnIt</span>() {
+        String body = <span class="str">"{\\"title\\":\\"Read a book\\",\\"description\\":\\"Clean Architecture\\"}"</span>;
+
+        <span class="com">// 1️⃣ POST con un token cualquiera (el filtro de test lo acepta)</span>
+        Response response = <span class="fn">given</span>()
+                .<span class="fn">contentType</span>(JSON)
+                .<span class="fn">header</span>(<span class="str">"Authorization"</span>, <span class="str">"Bearer fake-token"</span>)
+                .<span class="fn">body</span>(body)
+                .<span class="fn">when</span>().<span class="fn">post</span>(<span class="str">"/todos"</span>)
+                .<span class="fn">then</span>()
+                    .<span class="fn">statusCode</span>(<span class="num-lit">200</span>)
+                    .<span class="fn">body</span>(<span class="str">"title"</span>, <span class="fn">equalTo</span>(<span class="str">"Read a book"</span>))
+                    .<span class="fn">body</span>(<span class="str">"id"</span>, <span class="fn">notNullValue</span>())
+                    .<span class="fn">extract</span>().<span class="fn">response</span>();
+
+        <span class="com">// Extraer el id devuelto</span>
+        UUID returnedId = UUID.<span class="fn">fromString</span>(response.<span class="fn">jsonPath</span>().<span class="fn">getString</span>(<span class="str">"id"</span>));
+
+        <span class="com">// 2️⃣ Releer de H2 y validar persistencia</span>
+        TodoEntity persisted = todoRepository.<span class="fn">findById</span>(returnedId);
+        <span class="fn">assertNotNull</span>(persisted, <span class="str">"Todo should be persisted in H2"</span>);
+        <span class="fn">assertEquals</span>(<span class="str">"Read a book"</span>, persisted.<span class="fn">getTitle</span>());
+        <span class="fn">assertEquals</span>(<span class="str">"Clean Architecture"</span>, persisted.<span class="fn">getDescription</span>());
+        <span class="fn">assertNotNull</span>(persisted.<span class="fn">getCreatedAt</span>());
+    }
+}</code></pre>
+
+      <details>
+        <summary>¿Cómo se conectan todas las piezas?</summary>
+        <p>Cuando arranca <code>@QuarkusTest</code>:</p>
+        <ol>
+          <li>Quarkus lee el perfil <code>test</code> de <code>application.properties</code> → conecta a H2</li>
+          <li>Hibernate hace <code>drop-and-create</code> de las tablas</li>
+          <li><code>@Mock TestFirebaseAuthFilter</code> reemplaza al filtro real</li>
+          <li><code>RestAssured</code> envía el HTTP request</li>
+          <li>El request entra al servidor de test de Quarkus, pasa por el filtro mockeado</li>
+          <li>El endpoint llama al use case, que llama al repo, que escribe en H2</li>
+          <li>El test lee H2 directamente para confirmar</li>
+        </ol>
+      </details>
+    `
+  },
+
+  {
+    title: "Ejecutar y resultados",
+    content: `
+      <h2>10. Correr todas las pruebas</h2>
+      <pre><code>$ ./mvnw test</code></pre>
+
+      <h3>Resultado esperado</h3>
+      <pre><code><span class="com">[INFO]</span> Tests run: 1, Failures: 0, Errors: 0 -- TodoRepositoryImplTest
+<span class="com">[INFO]</span> Tests run: 2, Failures: 0, Errors: 0 -- UserRepositoryImplTest
+<span class="com">[INFO]</span> Tests run: 1, Failures: 0, Errors: 0 -- TodoResourceTest
+<span class="com">[INFO]</span> Tests run: 2, Failures: 0, Errors: 0 -- UserResourceTest
+<span class="com">[INFO]</span> Tests run: 2, Failures: 0, Errors: 0 -- CreateTodoUseCaseTest
+<span class="com">[INFO]</span> Tests run: 2, Failures: 0, Errors: 0 -- RegisterUserUseCaseTest
+<span class="com">[INFO]</span> Tests run: 10, Failures: 0, Errors: 0
+<span class="com">[INFO]</span> BUILD SUCCESS</code></pre>
+
+      <div class="stats">
+        <div class="stat"><span class="n">10</span><span class="l">Tests pasando</span></div>
+        <div class="stat"><span class="n">0</span><span class="l">Failures</span></div>
+        <div class="stat"><span class="n">0</span><span class="l">Errors</span></div>
+        <div class="stat"><span class="n">✓</span><span class="l">Build OK</span></div>
+      </div>
+
+      <h3>Resumen de archivos creados</h3>
+      <ul>
+        <li><span class="badge badge-edit">edit</span> <code>pom.xml</code> — dependencias H2 + Mockito</li>
+        <li><span class="badge badge-edit">edit</span> <code>application.properties</code> — perfil <code>%test.</code> con H2</li>
+        <li><span class="badge badge-new">new</span> <code>infrastructure/firebase/FirebaseUserCreator.java</code></li>
+        <li><span class="badge badge-edit">edit</span> <code>application/usecase/RegisterUserUseCase.java</code></li>
+        <li><span class="badge badge-new">new</span> <code>test/.../CreateTodoUseCaseTest.java</code></li>
+        <li><span class="badge badge-new">new</span> <code>test/.../RegisterUserUseCaseTest.java</code></li>
+        <li><span class="badge badge-new">new</span> <code>test/.../UserRepositoryImplTest.java</code></li>
+        <li><span class="badge badge-new">new</span> <code>test/.../TodoRepositoryImplTest.java</code></li>
+        <li><span class="badge badge-new">new</span> <code>test/.../TestFirebaseAuthFilter.java</code></li>
+        <li><span class="badge badge-new">new</span> <code>test/.../UserResourceTest.java</code></li>
+        <li><span class="badge badge-new">new</span> <code>test/.../TodoResourceTest.java</code></li>
+      </ul>
+
+      <h3>Lecciones clave</h3>
+      <div class="callout success">
+        <strong>1.</strong> Usa <strong>perfiles</strong> de Quarkus (<code>%test.</code>) para configurar la BD de testing en el mismo <code>application.properties</code>.
+      </div>
+      <div class="callout success">
+        <strong>2.</strong> <strong>Aísla las dependencias estáticas</strong> (Firebase, time, random) en beans CDI delgados para poder mockearlas con <code>@InjectMock</code>.
+      </div>
+      <div class="callout success">
+        <strong>3.</strong> Las pruebas de integración deben <strong>verificar persistencia leyendo de la BD</strong>, no solo confiar en la respuesta HTTP.
+      </div>
+      <div class="callout success">
+        <strong>4.</strong> Usa <code>@io.quarkus.test.Mock</code> para reemplazar beans completos en tests (filtros de auth, servicios externos, etc.).
+      </div>
+
+      <h3>Ejercicios propuestos</h3>
+      <ol>
+        <li>Agrega un endpoint <code>GET /todos</code> y escribe pruebas unitarias e integración para él.</li>
+        <li>Crea una prueba que verifique el comportamiento cuando el email ya existe (constraint unique de la BD).</li>
+        <li>Agrega un test de integración que valide que <code>findByFirebaseUuid</code> retorna <code>Optional.empty()</code> cuando el usuario no existe.</li>
+      </ol>
+    `
+  }
+];
+
+const stepList = document.getElementById('stepList');
+const content = document.getElementById('content');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const progressBar = document.getElementById('progressBar');
+
+let current = 0;
+
+function render() {
+  stepList.innerHTML = '';
+  steps.forEach((s, i) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.innerHTML = `<span class="num">${i + 1}</span><span>${s.title}</span>`;
+    if (i === current) btn.classList.add('active');
+    if (i < current) btn.classList.add('done');
+    btn.onclick = () => { current = i; render(); };
+    li.appendChild(btn);
+    stepList.appendChild(li);
+  });
+
+  content.innerHTML = `<div class="step active">${steps[current].content}</div>`;
+
+  prevBtn.disabled = current === 0;
+  nextBtn.disabled = current === steps.length - 1;
+  progressBar.style.width = `${((current + 1) / steps.length) * 100}%`;
+
+  // Wire up quizzes
+  content.querySelectorAll('.quiz').forEach(quiz => {
+    const correct = parseInt(quiz.dataset.correct);
+    const buttons = quiz.querySelectorAll('.quiz-options button');
+    const feedback = quiz.querySelector('.quiz-feedback');
+    buttons.forEach((b, idx) => {
+      b.onclick = () => {
+        buttons.forEach(x => { x.classList.remove('correct', 'wrong'); x.disabled = false; });
+        if (idx === correct) {
+          b.classList.add('correct');
+          feedback.innerHTML = '<span style="color: var(--green)">✓ ¡Correcto!</span>';
+        } else {
+          b.classList.add('wrong');
+          buttons[correct].classList.add('correct');
+          feedback.innerHTML = '<span style="color: var(--red)">✗ La respuesta correcta es la marcada en verde.</span>';
+        }
+      };
+    });
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+prevBtn.onclick = () => { if (current > 0) { current--; render(); } };
+nextBtn.onclick = () => { if (current < steps.length - 1) { current++; render(); } };
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' && current < steps.length - 1) { current++; render(); }
+  if (e.key === 'ArrowLeft' && current > 0) { current--; render(); }
+});
+
+render();
+</script>
+</body>
+</html>

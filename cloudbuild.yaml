@@ -1,0 +1,47 @@
+steps:
+  # Build the Quarkus app
+  - name: 'maven:3.9-eclipse-temurin-17'
+    entrypoint: mvn
+    args:
+      - 'package'
+      - '-DskipTests'
+
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'src/main/docker/Dockerfile.jvm'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/equipo2-todo-back/equipo2-todo-image:$SHORT_SHA'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/equipo2-todo-back/equipo2-todo-image:latest'
+      - '.'
+
+  # Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/equipo2-todo-back/equipo2-todo-image'
+
+  # Deploy to Cloud Run
+  - id: deploy
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        gcloud run deploy equipo2-todo-crs \
+          --image "us-central1-docker.pkg.dev/$PROJECT_ID/equipo2-todo-back/equipo2-todo-image:latest" \
+          --region us-central1 \
+          --platform managed \
+          --allow-unauthenticated
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/equipo2-todo-back/equipo2-todo-image:$SHORT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/equipo2-todo-back/equipo2-todo-image:latest'
